@@ -30,8 +30,11 @@ AI parsing (the only step that uses a model):
   JASEM_MODEL      model id (default per provider)
   JASEM_API_KEY    API key for openai/anthropic (falls back to
                    OPENAI_API_KEY / ANTHROPIC_API_KEY)
-  JASEM_API_BASE   base URL override (any OpenAI-compatible endpoint;
-                   default https://api.openai.com/v1 or https://api.anthropic.com)
+  JASEM_OPENAI_API_BASE
+                   OpenAI-compatible base URL override (also honors
+                   JASEM_OPENAI_BASE_URL / OPENAI_BASE_URL)
+  JASEM_API_BASE   shared base URL fallback for hosted providers
+                   (default https://api.openai.com/v1 or https://api.anthropic.com)
   OLLAMA_HOST      default http://localhost:11434
 
 Storage (plain Markdown, hand-editable):
@@ -50,9 +53,19 @@ import urllib.request
 import urllib.error
 
 # ---------- AI backend configuration ----------
+def _base_url(value):
+    return (value or "").strip().rstrip("/")
+
+
 PROVIDER = os.environ.get("JASEM_PROVIDER", "ollama").strip().lower()
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-API_BASE = os.environ.get("JASEM_API_BASE", "").rstrip("/")
+API_BASE = _base_url(os.environ.get("JASEM_API_BASE"))
+OPENAI_API_BASE = (
+    _base_url(os.environ.get("JASEM_OPENAI_API_BASE"))
+    or _base_url(os.environ.get("JASEM_OPENAI_BASE_URL"))
+    or _base_url(os.environ.get("OPENAI_BASE_URL"))
+    or API_BASE
+)
 API_KEY = (
     os.environ.get("JASEM_API_KEY")
     or os.environ.get("OPENAI_API_KEY")
@@ -288,7 +301,7 @@ def _parse_ollama(prompt):
 
 
 def _parse_openai(prompt):
-    base = API_BASE or "https://api.openai.com/v1"
+    base = OPENAI_API_BASE or "https://api.openai.com/v1"
     headers = {"Authorization": "Bearer " + API_KEY} if API_KEY else {}
     body = {
         "model": MODEL,
@@ -829,7 +842,8 @@ def usage():
         H("AI PARSING") + d("  the only step that calls a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", d("local, no key — run ") + cmd("ollama serve") + d(" + a small model")),
         row("  openai", d("any OpenAI-compatible API — set ") + ex("JASEM_API_KEY")
-            + d(" (+ ") + ex("JASEM_API_BASE") + d(" for non-OpenAI hosts)")),
+            + d(" (+ ") + ex("JASEM_OPENAI_API_BASE") + d(" or ") + ex("OPENAI_BASE_URL")
+            + d(" for non-OpenAI hosts)")),
         row("  anthropic", d("Claude — set ") + ex("JASEM_PROVIDER=anthropic") + d(" + ") + ex("JASEM_API_KEY")),
         "  " + d("if the backend is unreachable, the task is still saved (regex dates, no tags)."),
 
@@ -839,7 +853,8 @@ def usage():
         row("  tasks", TASK_FILE + d("  (plain Markdown, hand-editable)")),
         row("  time log", TRACK_FILE + d("  (plain Markdown)")),
         row("  env vars", d("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_PROVIDER · "
-                            "JASEM_MODEL · JASEM_API_KEY · JASEM_API_BASE · OLLAMA_HOST")),
+                            "JASEM_MODEL · JASEM_API_KEY · JASEM_OPENAI_API_BASE · "
+                            "JASEM_API_BASE · OLLAMA_HOST")),
     ]
     print("\n".join(out))
 
