@@ -52,7 +52,8 @@ Parsing is the only step that uses a model — pick one with environment variabl
 ollama serve && ollama pull qwen2.5:3b
 
 # Any OpenAI-compatible API (OpenAI, Groq, OpenRouter, LM Studio, …)
-export JASEM_PROVIDER=openai   JASEM_API_KEY=sk-...      # + JASEM_API_BASE for non-OpenAI hosts
+export JASEM_PROVIDER=openai JASEM_API_KEY=sk-...
+export JASEM_OPENAI_API_BASE=https://openrouter.ai/api/v1  # or OPENAI_BASE_URL
 
 # Anthropic (Claude)
 export JASEM_PROVIDER=anthropic JASEM_API_KEY=sk-ant-...
