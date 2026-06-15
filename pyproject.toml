@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jasem"
+version = "0.2.0"
+description = "A plain-text task manager and time tracker with pluggable AI parsing (Ollama / OpenAI-compatible / Anthropic)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "mrfatolahi1", email = "fatolahi.cs@gmail.com" }]
+keywords = ["todo", "tasks", "cli", "time-tracking", "ollama", "llm", "anthropic", "openai"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Scheduling",
+    "Topic :: Utilities",
+]
+dependencies = []  # stdlib only — nothing to install
+
+[project.scripts]
+jasem = "jasem:cli"
+
+[project.urls]
+Homepage = "https://github.com/mrfatolahi1/jasem"
+Source = "https://github.com/mrfatolahi1/jasem"
+
+[tool.setuptools]
+py-modules = ["jasem"]

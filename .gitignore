@@ -1,0 +1,20 @@
+# Local editor / agent tooling config (not part of the package)
+.claude/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Local task data — keep personal tasks/time out of the repo.
+# (jasem defaults to ~/.jasem, so this only matters if you point
+#  JASEM_DIR/JASEM_FILE at the project folder.)
+tasks.md
+timelog.md
+*.md.bak
