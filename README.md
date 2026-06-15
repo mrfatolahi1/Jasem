@@ -54,6 +54,7 @@ ollama serve && ollama pull qwen2.5:3b
 # Any OpenAI-compatible API (OpenAI, Groq, OpenRouter, LM Studio, …)
 export JASEM_PROVIDER=openai JASEM_API_KEY=sk-...
 export JASEM_OPENAI_API_BASE=https://openrouter.ai/api/v1  # or OPENAI_BASE_URL
+# For OpenRouter specifically, OPENROUTER_API_KEY is also accepted.
 
 # Anthropic (Claude)
 export JASEM_PROVIDER=anthropic JASEM_API_KEY=sk-ant-...

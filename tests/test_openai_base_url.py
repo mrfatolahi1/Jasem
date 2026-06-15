@@ -1,6 +1,9 @@
+import io
 import importlib
 import os
+import urllib.error
 import unittest
+from contextlib import redirect_stderr
 from unittest import mock
 
 import jasem
@@ -48,6 +51,54 @@ class OpenAIBaseUrlTests(unittest.TestCase):
             calls[0][0],
             "https://openai-proxy.example/v1/chat/completions",
         )
+
+    def test_openai_parser_accepts_openrouter_api_key(self):
+        module = self.reload_jasem({
+            "JASEM_PROVIDER": "openai",
+            "JASEM_OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "OPENROUTER_API_KEY": "or-key",
+        })
+        calls = []
+
+        def fake_http_json(url, payload, headers, timeout=120):
+            calls.append((url, payload, headers, timeout))
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+        module._http_json = fake_http_json
+
+        self.assertEqual(module._parse_openai("parse this"), {})
+        self.assertEqual(calls[0][2]["Authorization"], "Bearer or-key")
+
+    def test_parse_task_reports_http_error_body(self):
+        module = self.reload_jasem({
+            "JASEM_PROVIDER": "openai",
+            "JASEM_OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "JASEM_MODEL": "openai/gpt-5",
+            "JASEM_API_KEY": "bad-key",
+        })
+        body = b'{"error":{"message":"Missing Authentication header","code":401}}'
+
+        def fail(_prompt):
+            raise urllib.error.HTTPError(
+                "https://openrouter.ai/api/v1/chat/completions",
+                401,
+                "Unauthorized",
+                hdrs={},
+                fp=io.BytesIO(body),
+            )
+
+        module.PROVIDERS["openai"] = fail
+        stderr = io.StringIO()
+
+        with redirect_stderr(stderr):
+            task = module.parse_task("pay rent tomorrow high finance")
+
+        self.assertEqual(task["deadline"], module.resolve_date("tomorrow", module.dt.date.today()))
+        self.assertIn(
+            "HTTP 401 Unauthorized: Missing Authentication header",
+            stderr.getvalue(),
+        )
+        self.assertIn("OPENROUTER_API_KEY", stderr.getvalue())
 
 
 if __name__ == "__main__":

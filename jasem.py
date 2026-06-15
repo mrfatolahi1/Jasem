@@ -29,10 +29,13 @@ AI parsing (the only step that uses a model):
   JASEM_PROVIDER   ollama (default) | openai | anthropic
   JASEM_MODEL      model id (default per provider)
   JASEM_API_KEY    API key for openai/anthropic (falls back to
-                   OPENAI_API_KEY / ANTHROPIC_API_KEY)
+                   OPENAI_API_KEY / OPENROUTER_API_KEY / ANTHROPIC_API_KEY)
   JASEM_OPENAI_API_BASE
                    OpenAI-compatible base URL override (also honors
                    JASEM_OPENAI_BASE_URL / OPENAI_BASE_URL)
+  OPENROUTER_API_KEY
+                   API key fallback when using OpenRouter as the
+                   OpenAI-compatible backend
   JASEM_API_BASE   shared base URL fallback for hosted providers
                    (default https://api.openai.com/v1 or https://api.anthropic.com)
   OLLAMA_HOST      default http://localhost:11434
@@ -57,6 +60,18 @@ def _base_url(value):
     return (value or "").strip().rstrip("/")
 
 
+def _first_env(*names):
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value.strip()
+    return ""
+
+
+def _is_openrouter_base(value):
+    return "openrouter.ai" in (value or "").lower()
+
+
 PROVIDER = os.environ.get("JASEM_PROVIDER", "ollama").strip().lower()
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 API_BASE = _base_url(os.environ.get("JASEM_API_BASE"))
@@ -66,12 +81,23 @@ OPENAI_API_BASE = (
     or _base_url(os.environ.get("OPENAI_BASE_URL"))
     or API_BASE
 )
-API_KEY = (
-    os.environ.get("JASEM_API_KEY")
-    or os.environ.get("OPENAI_API_KEY")
-    or os.environ.get("ANTHROPIC_API_KEY")
-    or ""
-)
+
+
+def _provider_api_key(provider):
+    if provider == "openai":
+        names = ["JASEM_API_KEY"]
+        if _is_openrouter_base(OPENAI_API_BASE):
+            names.append("OPENROUTER_API_KEY")
+        names.append("OPENAI_API_KEY")
+        if not _is_openrouter_base(OPENAI_API_BASE):
+            names.append("OPENROUTER_API_KEY")
+        return _first_env(*names)
+    if provider == "anthropic":
+        return _first_env("JASEM_API_KEY", "ANTHROPIC_API_KEY")
+    return ""
+
+
+API_KEY = _provider_api_key(PROVIDER)
 _DEFAULT_MODEL = {
     "ollama": "qwen2.5:3b",
     "openai": "gpt-4o-mini",
@@ -361,6 +387,48 @@ def llm_parse(text, today):
     return fn(_build_prompt(text, today))
 
 
+def _http_error_detail(err):
+    reason = getattr(err, "reason", "") or ""
+    prefix = f"HTTP {err.code}" + (f" {reason}" if reason else "")
+    try:
+        raw = err.read().decode("utf-8", "replace").strip()
+    except Exception:
+        raw = ""
+    if not raw:
+        return prefix
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        detail = raw
+    else:
+        error = parsed.get("error") if isinstance(parsed, dict) else None
+        if isinstance(error, dict):
+            detail = error.get("message") or json.dumps(error)
+        elif error:
+            detail = str(error)
+        else:
+            detail = raw
+    detail = re.sub(r"\s+", " ", detail)
+    if len(detail) > 500:
+        detail = detail[:497] + "..."
+    return f"{prefix}: {detail}"
+
+
+def _backend_hint():
+    if PROVIDER == "ollama":
+        return "Check OLLAMA_HOST / JASEM_MODEL, or that 'ollama serve' is running."
+    if PROVIDER == "openai":
+        if _is_openrouter_base(OPENAI_API_BASE):
+            return (
+                "Check JASEM_OPENAI_API_BASE / JASEM_MODEL and your OpenRouter "
+                "key (JASEM_API_KEY or OPENROUTER_API_KEY)."
+            )
+        return "Check JASEM_OPENAI_API_BASE / JASEM_MODEL / JASEM_API_KEY / OPENAI_API_KEY."
+    if PROVIDER == "anthropic":
+        return "Check JASEM_API_BASE / JASEM_MODEL / JASEM_API_KEY / ANTHROPIC_API_KEY."
+    return "Check JASEM_PROVIDER / JASEM_MODEL / JASEM_API_KEY."
+
+
 def parse_task(text):
     today = dt.date.today()
     try:
@@ -377,11 +445,16 @@ def parse_task(text):
         if priority not in PRIORITY_RANK:
             priority = "medium"
         tags = [str(t).strip() for t in d.get("tags", []) if str(t).strip()]
-    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+    except urllib.error.HTTPError as e:
+        sys.stderr.write(
+            RED(f"! {PROVIDER} backend error ({_http_error_detail(e)}); storing raw text.\n")
+            + DIM(f"  {_backend_hint()}\n")
+        )
+        title, deadline, priority, tags = _local_parse(text, today)
+    except urllib.error.URLError as e:
         sys.stderr.write(
             RED(f"! Could not reach the {PROVIDER} backend ({e}); storing raw text.\n")
-            + DIM("  Check JASEM_PROVIDER / JASEM_MODEL / JASEM_API_KEY, "
-                  "or that 'ollama serve' is running.\n")
+            + DIM(f"  {_backend_hint()}\n")
         )
         title, deadline, priority, tags = _local_parse(text, today)
     except Exception as e:
@@ -843,7 +916,8 @@ def usage():
         row("  ollama  (default)", d("local, no key — run ") + cmd("ollama serve") + d(" + a small model")),
         row("  openai", d("any OpenAI-compatible API — set ") + ex("JASEM_API_KEY")
             + d(" (+ ") + ex("JASEM_OPENAI_API_BASE") + d(" or ") + ex("OPENAI_BASE_URL")
-            + d(" for non-OpenAI hosts)")),
+            + d(" for non-OpenAI hosts; ") + ex("OPENROUTER_API_KEY")
+            + d(" also works for OpenRouter)")),
         row("  anthropic", d("Claude — set ") + ex("JASEM_PROVIDER=anthropic") + d(" + ") + ex("JASEM_API_KEY")),
         "  " + d("if the backend is unreachable, the task is still saved (regex dates, no tags)."),
 
@@ -854,7 +928,7 @@ def usage():
         row("  time log", TRACK_FILE + d("  (plain Markdown)")),
         row("  env vars", d("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_PROVIDER · "
                             "JASEM_MODEL · JASEM_API_KEY · JASEM_OPENAI_API_BASE · "
-                            "JASEM_API_BASE · OLLAMA_HOST")),
+                            "OPENROUTER_API_KEY · JASEM_API_BASE · OLLAMA_HOST")),
     ]
     print("\n".join(out))
 
