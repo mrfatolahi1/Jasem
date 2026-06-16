@@ -3,7 +3,7 @@
 import datetime as dt
 import urllib.error
 
-from .domain.task import PRIORITY_RANK
+from ..domain.task import PRIORITY_RANK
 
 _RULES = (
     "Extract structured fields from the task description below.\n"

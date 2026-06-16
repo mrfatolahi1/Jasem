@@ -21,7 +21,7 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-jasem = "jasem.cli:main"
+jasem = "jasem.interface.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/mrfatolahi1/Jasem"

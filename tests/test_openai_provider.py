@@ -3,9 +3,9 @@
 import unittest
 from unittest import mock
 
-from jasem.config import Config
-from jasem.providers import openai as openai_module
-from jasem.providers.openai import OpenAIProvider
+from jasem.shared.config import Config
+from jasem.infrastructure.providers import openai as openai_module
+from jasem.infrastructure.providers.openai import OpenAIProvider
 
 
 class OpenAIProviderTests(unittest.TestCase):

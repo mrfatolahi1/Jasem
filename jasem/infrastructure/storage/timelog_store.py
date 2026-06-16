@@ -1,6 +1,6 @@
 """Persistence of time-log entries in a Markdown table."""
 
-from ..domain.time_entry import TimeEntry
+from ...domain.time_entry import TimeEntry
 from .markdown_table import MarkdownTable, sanitize
 
 _COLUMNS = ["Date", "Time", "Work", "Tag"]

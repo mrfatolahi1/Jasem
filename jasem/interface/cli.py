@@ -2,9 +2,9 @@
 
 import sys
 
-from .app import App
-from .config import Config
-from .console import Console
+from ..application.app import App
+from ..shared.config import Config
+from ..shared.console import Console
 
 
 def main(argv=None):

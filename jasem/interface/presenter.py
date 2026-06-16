@@ -1,6 +1,6 @@
 """Rendering of tasks and time-log entries for the terminal."""
 
-from .durations import format_minutes
+from ..shared.durations import format_minutes
 
 
 class Presenter:

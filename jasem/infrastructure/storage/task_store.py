@@ -1,6 +1,6 @@
 """Persistence of tasks in a Markdown table."""
 
-from ..domain.task import Task
+from ...domain.task import Task
 from .markdown_table import MarkdownTable, sanitize
 
 _COLUMNS = ["ID", "✓", "Priority", "Deadline", "Task", "Tags", "Created"]

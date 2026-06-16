@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from ..durations import parse_minutes
+from ..shared.durations import parse_minutes
 
 
 @dataclass

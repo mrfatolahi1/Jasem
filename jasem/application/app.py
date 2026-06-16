@@ -3,15 +3,15 @@
 import datetime as dt
 import re
 
-from .dates import DateResolver
-from .domain.task import PRIORITY_RANK, Task
-from .domain.time_entry import TimeEntry
-from .durations import parse_minutes
-from .help import render_help
+from ..domain.task import PRIORITY_RANK, Task
+from ..domain.time_entry import TimeEntry
+from ..infrastructure.providers import get_provider
+from ..infrastructure.storage import TaskStore, TimeLogStore
+from ..interface.help import render_help
+from ..interface.presenter import Presenter
+from ..shared.dates import DateResolver
+from ..shared.durations import parse_minutes
 from .parsing import TaskParser
-from .presenter import Presenter
-from .providers import get_provider
-from .storage import TaskStore, TimeLogStore
 
 VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
 """Subcommands that render a filtered list of tasks."""

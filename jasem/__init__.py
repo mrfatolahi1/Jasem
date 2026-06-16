@@ -1,9 +1,10 @@
 """jasem — a plain-text task manager and time tracker with pluggable AI parsing.
 
-The package is organised in layers: :mod:`jasem.domain` holds the data models,
-:mod:`jasem.storage` persists them as Markdown tables, :mod:`jasem.providers`
-talks to AI backends, :mod:`jasem.parsing` turns text into task fields, and
-:mod:`jasem.app` / :mod:`jasem.cli` form the command-line interface.
+The package is organised in layers, each in its own sub-package:
+:mod:`jasem.domain` holds the data models, :mod:`jasem.infrastructure` persists
+them and talks to AI backends, :mod:`jasem.application` turns text into tasks
+and runs the commands, :mod:`jasem.interface` drives and renders the CLI, and
+:mod:`jasem.shared` holds primitives used across them.
 """
 
 __version__ = "0.3.0"

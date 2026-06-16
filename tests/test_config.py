@@ -2,7 +2,7 @@
 
 import unittest
 
-from jasem.config import Config
+from jasem.shared.config import Config
 
 
 class ConfigBaseUrlTests(unittest.TestCase):
