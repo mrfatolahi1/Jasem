@@ -1,0 +1,321 @@
+"""The application layer: command handlers wiring the pieces together."""
+
+import datetime as dt
+import re
+
+from .dates import DateResolver
+from .domain.task import PRIORITY_RANK, Task
+from .domain.time_entry import TimeEntry
+from .durations import parse_minutes
+from .help import render_help
+from .parsing import TaskParser
+from .presenter import Presenter
+from .providers import get_provider
+from .storage import TaskStore, TimeLogStore
+
+VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
+"""Subcommands that render a filtered list of tasks."""
+
+CLEAR_WORDS = {"none", "no", "clear", "remove", "-", "n/a", "na", "null", ""}
+"""Values that mean 'empty this field' when editing a task."""
+
+FIELD_ALIASES = {
+    "priority": {"priority", "prio", "p"},
+    "deadline": {"deadline", "due", "date", "d"},
+    "category": {"category", "categories", "tag", "tags", "c"},
+}
+"""Accepted aliases for each editable field of ``jasem set``."""
+
+
+def resolve_field(name):
+    """Return the canonical field name for an alias, or ``None`` if unknown."""
+    lowered = name.lower()
+    for field, aliases in FIELD_ALIASES.items():
+        if lowered in aliases:
+            return field
+    return None
+
+
+class App:
+    """Holds the wired collaborators and exposes one method per command."""
+
+    def __init__(self, config, console):
+        """Construct stores, parser, and presenter from the given config.
+
+        Args:
+            config: The resolved :class:`~jasem.config.Config`.
+            console: The output :class:`~jasem.console.Console`.
+        """
+        self.config = config
+        self.console = console
+        self.dates = DateResolver()
+        self.presenter = Presenter(console)
+        self.tasks = TaskStore(config.task_file)
+        self.timelog = TimeLogStore(config.track_file)
+        self.parser = TaskParser(get_provider, config, self.dates, console)
+
+    def run(self, argv):
+        """Route a command-line argument list to the matching handler.
+
+        Args:
+            argv: Arguments excluding the program name.
+        """
+        if not argv or argv[0] in ("help", "-h", "--help"):
+            self.console.print(render_help(self.console, self.config))
+            return
+        command, rest = argv[0], argv[1:]
+        if command == "tags":
+            self.show_tags()
+        elif command in VIEW_NAMES:
+            self.show_view(command, rest)
+        elif command in ("done", "rm"):
+            self.complete_or_remove(command, rest)
+        elif command in ("set", "edit"):
+            self.set_field(rest)
+        elif command == "track":
+            self.track(rest)
+        elif command == "add":
+            if not rest:
+                self.console.print(self.console.red("usage: jasem add <description>"))
+                return
+            self.add(" ".join(rest))
+        else:
+            self.add(" ".join(argv))
+
+    def add(self, text):
+        """Parse ``text`` into a task, store it, and report the result."""
+        tasks = self.tasks.load()
+        task = Task(**self.parser.parse(text))
+        task.id = self.tasks.next_id(tasks)
+        tasks.append(task)
+        self.tasks.save(tasks)
+        console = self.console
+        console.print(" ".join([console.green("✓ added"), f"#{task.id}:", console.bold(task.title)]))
+        detail = f"  priority={task.priority}  deadline={task.deadline or 'no deadline'}"
+        if task.tags:
+            detail += f"  tags={task.tags}"
+        console.print(console.dim(detail))
+
+    def show_view(self, name, filters):
+        """Render the named task view, optionally filtered by categories."""
+        today = dt.date.today().isoformat()
+        week = (dt.date.today() + dt.timedelta(days=7)).isoformat()
+        views = {
+            "list": (lambda task: not task.done, "Open tasks"),
+            "ls": (lambda task: not task.done, "Open tasks"),
+            "all": (lambda task: True, "All tasks"),
+            "today": (lambda task: not task.done and task.deadline == today, "Due today"),
+            "week": (lambda task: not task.done and task.deadline
+                     and today <= task.deadline <= week, "Due within 7 days"),
+            "overdue": (lambda task: not task.done and task.deadline
+                        and task.deadline < today, "Overdue"),
+        }
+        predicate, header = views[name]
+        tasks = [task for task in self.tasks.load() if predicate(task)]
+        if filters:
+            categories = [item.strip().lower() for item in filters]
+            tasks = [task for task in tasks
+                     if all(category in task.tag_list() for category in categories)]
+            header += "  ·  " + " ".join("#" + category for category in categories)
+        self.presenter.tasks(tasks, header, today)
+
+    def complete_or_remove(self, command, rest):
+        """Handle ``done``/``rm`` after parsing their integer id arguments."""
+        ids = set()
+        for argument in rest:
+            try:
+                ids.add(int(argument))
+            except ValueError:
+                pass
+        if not ids:
+            console = self.console
+            console.print(console.red(f"usage: jasem {command} <id> [id...]"))
+            console.print(console.dim(
+                f'  (to add a task that starts with "{command}", quote it: '
+                f'jasem add "{command} ...")'
+            ))
+            return
+        if command == "done":
+            self.complete(ids)
+        else:
+            self.remove(ids)
+
+    def complete(self, ids):
+        """Mark the tasks with the given ids complete."""
+        tasks = self.tasks.load()
+        completed = [task for task in tasks if task.id in ids]
+        for task in completed:
+            task.done = True
+        self.tasks.save(tasks)
+        console = self.console
+        if completed:
+            summary = ", ".join(f"#{task.id} {task.title}" for task in completed)
+            console.print(console.green("✓ completed:") + " " + summary)
+        else:
+            console.print(console.red("no matching id(s)"))
+
+    def remove(self, ids):
+        """Delete the tasks with the given ids."""
+        tasks = self.tasks.load()
+        kept = [task for task in tasks if task.id not in ids]
+        removed = len(tasks) - len(kept)
+        self.tasks.save(kept)
+        console = self.console
+        console.print(
+            console.green(f"✓ removed {removed} task(s)") if removed
+            else console.red("no matching id(s)")
+        )
+
+    def set_field(self, args):
+        """Update one field of a task identified by its id."""
+        console = self.console
+        if len(args) < 3:
+            console.print(console.red("usage: jasem set <id> <priority|deadline|category> <value>"))
+            console.print(console.dim("  e.g.  jasem set 3 priority high"))
+            console.print(console.dim("        jasem set 3 deadline next friday"))
+            console.print(console.dim("        jasem set 3 category work finance     (none clears it)"))
+            return
+        try:
+            identifier = int(args[0])
+        except ValueError:
+            console.print(console.red(f"not a valid id: {args[0]}"))
+            return
+        field = resolve_field(args[1])
+        if not field:
+            console.print(console.red(f"unknown field: {args[1]}"))
+            console.print(console.dim("  fields: priority · deadline · category"))
+            return
+        tasks = self.tasks.load()
+        task = next((item for item in tasks if item.id == identifier), None)
+        if task is None:
+            console.print(console.red(f"no task with id #{identifier}"))
+            return
+        message = self._apply_field(task, field, " ".join(args[2:]).strip())
+        if message is None:
+            return
+        self.tasks.save(tasks)
+        console.print(console.green(f"✓ #{identifier} updated:") + " " + message)
+        console.print(console.dim("  " + task.title))
+
+    def _apply_field(self, task, field, value):
+        """Apply ``value`` to ``field`` of ``task``.
+
+        Returns:
+            A confirmation message, or ``None`` when the value was rejected
+            (an explanation has already been printed).
+        """
+        console = self.console
+        if field == "priority":
+            lowered = value.lower()
+            if lowered not in PRIORITY_RANK:
+                console.print(console.red(f"priority must be one of: {', '.join(PRIORITY_RANK)}"))
+                return None
+            task.priority = lowered
+            return f"priority → {lowered}"
+        if field == "deadline":
+            if value.lower() in CLEAR_WORDS:
+                task.deadline = ""
+                return "deadline cleared"
+            resolved = self.dates.resolve(value, dt.date.today())
+            if not resolved:
+                console.print(console.red(f"could not understand deadline: {value!r}"))
+                console.print(console.dim(
+                    "  try: tomorrow · next friday · in 3 days · june 20 · 2026-07-01 · none"
+                ))
+                return None
+            task.deadline = resolved
+            return f"deadline → {resolved}"
+        if value.lower() in CLEAR_WORDS:
+            task.tags = ""
+            return "category cleared"
+        parts = [part for part in (item.strip() for item in re.split(r"[,\s]+", value)) if part]
+        task.tags = ", ".join(parts)
+        return f"category → {task.tags}"
+
+    def show_tags(self):
+        """Print each category in use on open tasks with its count."""
+        counts = {}
+        for task in self.tasks.load():
+            if task.done:
+                continue
+            for tag in task.tag_list():
+                counts[tag] = counts.get(tag, 0) + 1
+        console = self.console
+        if not counts:
+            console.print(console.dim("  (no categories yet)"))
+            return
+        console.print(console.bold("Categories — open tasks"))
+        for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            console.print(f"  {count:>3}  " + console.cyan("#" + tag))
+
+    def track(self, args):
+        """Dispatch ``jasem track`` to either logging or viewing.
+
+        Comma-separated input is a new entry; a bare duration with no comma is a
+        half-typed entry routed to the logger for its usage hint; anything else
+        is a view request.
+        """
+        text = " ".join(args).strip()
+        words = text.split()
+        first = words[0].lower() if words else ""
+        if "," in text or (first not in ("today", "week", "all") and parse_minutes(text)):
+            self._track_add(text)
+            return
+        period = "today"
+        if words and words[0] in ("today", "week", "all"):
+            period = words.pop(0)
+        tag_filter = words[0].lower() if words else None
+        self._track_view(period, tag_filter)
+
+    def _track_add(self, text):
+        """Parse ``<time>, <work>[, <date>][, <tag>]`` and append an entry."""
+        console = self.console
+        parts = [part.strip() for part in text.split(",") if part.strip()]
+        if len(parts) < 2:
+            console.print(console.red('usage: jasem track "<time>, <work>[, <date>][, <tag>]"'))
+            console.print(console.dim('  e.g.  jasem track "2h, coding"'))
+            console.print(console.dim('        jasem track "30 min, coding, yesterday, work"'))
+            return
+        today = dt.date.today()
+        time_text, work, extra = parts[0], parts[1], parts[2:]
+        date_value, tag = "", ""
+        for item in extra:
+            resolved = self.dates.resolve(item, today)
+            if resolved and not date_value:
+                date_value = resolved
+            elif not tag:
+                tag = item
+        date_value = date_value or today.isoformat()
+        tag = tag or "work"
+        entries = self.timelog.load()
+        entries.append(TimeEntry(date=date_value, time_text=time_text, work=work, tag=tag))
+        self.timelog.save(entries)
+        when = "today" if date_value == today.isoformat() else date_value
+        console.print(" ".join([
+            console.green("✓ tracked"), console.bold(time_text), console.dim("·"),
+            work, console.dim(f"· {when} · #{tag}"),
+        ]))
+        if parse_minutes(time_text) == 0:
+            console.warn(console.yellow(
+                f"  (couldn't read a duration from {time_text!r}; "
+                "stored as-is, won't count toward totals)"
+            ))
+
+    def _track_view(self, period, tag_filter):
+        """Render the time log for a period, optionally filtered by tag."""
+        entries = self.timelog.load()
+        today = dt.date.today()
+        today_iso = today.isoformat()
+        if period == "all":
+            selected, header = entries, "Time log — all"
+        elif period == "week":
+            since = (today - dt.timedelta(days=6)).isoformat()
+            selected = [entry for entry in entries if entry.date >= since]
+            header = "Time log — last 7 days"
+        else:
+            selected = [entry for entry in entries if entry.date == today_iso]
+            header = "Time log — today"
+        if tag_filter:
+            selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
+            header += "  ·  #" + tag_filter
+        self.presenter.timelog(selected, header, today_iso)
