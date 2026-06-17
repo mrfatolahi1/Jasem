@@ -12,10 +12,8 @@ DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
     "anthropic": "claude-opus-4-8",
 }
-"""Default model identifier used for each provider when ``JASEM_MODEL`` is unset."""
 
 FALLBACK_MODEL = "qwen2.5:3b"
-"""Model used when the provider is unknown and no model is configured."""
 
 
 def clean_base_url(value):
@@ -45,7 +43,9 @@ class Config:
         """
         env = os.environ if env is None else env
         self.provider = env.get("JASEM_PROVIDER", "ollama").strip().lower()
-        self.ollama_host = (env.get("OLLAMA_HOST") or "http://localhost:11434").rstrip("/")
+        self.ollama_host = (env.get("OLLAMA_HOST") or "http://localhost:11434").rstrip(
+            "/"
+        )
         self.api_base = clean_base_url(env.get("JASEM_API_BASE"))
         self.openai_api_base = (
             clean_base_url(env.get("JASEM_OPENAI_API_BASE"))
@@ -59,7 +59,9 @@ class Config:
             or env.get("ANTHROPIC_API_KEY")
             or ""
         )
-        self.model = env.get("JASEM_MODEL") or DEFAULT_MODELS.get(self.provider, FALLBACK_MODEL)
+        self.model = env.get("JASEM_MODEL") or DEFAULT_MODELS.get(
+            self.provider, FALLBACK_MODEL
+        )
         self.directory = os.path.expanduser(env.get("JASEM_DIR", "~/.jasem"))
         self.task_file = os.path.expanduser(
             env.get("JASEM_FILE", os.path.join(self.directory, "tasks.md"))
