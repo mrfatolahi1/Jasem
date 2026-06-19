@@ -3,9 +3,13 @@
 import re
 
 _DURATION_PATTERN = re.compile(
-    r"(\d+(?:\.\d+)?)\s*(hours|hour|hrs|hr|h|minutes|minute|mins|min|m)\b"
+    r"(\d+(?:\.\d+)?)\s*(hours|hour|hrs|hr|h|minutes|minute|mins|min|m)(?![a-z])"
 )
-"""Matches a number followed by an hour or minute unit, longest spellings first."""
+"""Matches a number followed by an hour or minute unit, longest spellings first.
+
+The trailing ``(?![a-z])`` lets a unit butt straight up against the next number
+(so ``"1h45min"`` reads as both parts) while still rejecting a unit that is only
+the start of a longer word (the ``h`` in ``"5 hamburgers"``)."""
 
 
 def parse_minutes(text):

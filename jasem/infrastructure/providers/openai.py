@@ -2,7 +2,7 @@
 
 import urllib.error
 
-from .base import AIProvider
+from .base import TASK_SCHEMA, AIProvider
 from .http import extract_json, request_json
 
 _SYSTEM_PROMPT = (
@@ -19,15 +19,16 @@ class OpenAIProvider(AIProvider):
         """Return the configured OpenAI base URL, or the public default."""
         return self.config.openai_api_base or "https://api.openai.com/v1"
 
-    def parse(self, prompt):
+    def parse(self, prompt, schema=TASK_SCHEMA):
         """Call the chat completions endpoint and decode the JSON reply.
 
         Sends ``response_format=json_object`` and retries once without it when
         the endpoint rejects that field with a 400, since not every compatible
-        server supports it.
+        server supports it. ``schema`` is conveyed through the prompt's field
+        descriptions rather than enforced here, so it is accepted but unused.
 
         Returns:
-            The decoded task fields.
+            The decoded fields described by the prompt.
         """
         headers = {}
         if self.config.api_key:

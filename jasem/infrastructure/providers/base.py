@@ -13,11 +13,24 @@ TASK_SCHEMA = {
     },
     "required": ["title", "deadline_phrase", "deadline_date", "priority", "tags"],
 }
-"""JSON schema describing the fields every provider must return."""
+"""JSON schema describing the fields ``jasem add`` extracts."""
+
+TIME_ENTRY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "minutes": {"type": "integer"},
+        "work": {"type": "string"},
+        "date_phrase": {"type": "string"},
+        "date": {"type": "string"},
+        "tag": {"type": "string"},
+    },
+    "required": ["minutes", "work", "date_phrase", "date", "tag"],
+}
+"""JSON schema describing the fields ``jasem track`` extracts."""
 
 
 class AIProvider(ABC):
-    """Abstract base for backends that extract task fields from free text."""
+    """Abstract base for backends that extract structured fields from free text."""
 
     def __init__(self, config):
         """Store the configuration the provider needs.
@@ -28,12 +41,14 @@ class AIProvider(ABC):
         self.config = config
 
     @abstractmethod
-    def parse(self, prompt):
-        """Return the structured task fields for ``prompt``.
+    def parse(self, prompt, schema=TASK_SCHEMA):
+        """Return the structured fields described by ``schema`` for ``prompt``.
 
         Args:
             prompt: The fully built extraction prompt.
+            schema: JSON schema the reply must match; defaults to
+                :data:`TASK_SCHEMA` for backward compatibility.
 
         Returns:
-            A mapping matching :data:`TASK_SCHEMA`.
+            A mapping matching ``schema``.
         """
