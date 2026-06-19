@@ -11,7 +11,7 @@ from ..interface.help import render_help
 from ..interface.presenter import Presenter
 from ..shared.dates import DateResolver
 from ..shared.durations import parse_minutes
-from .parsing import TaskParser
+from .parsing import TaskParser, TimeEntryParser
 
 VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
 """Subcommands that render a filtered list of tasks."""
@@ -53,6 +53,7 @@ class App:
         self.tasks = TaskStore(config.task_file)
         self.timelog = TimeLogStore(config.track_file)
         self.parser = TaskParser(get_provider, config, self.dates, console)
+        self.time_parser = TimeEntryParser(get_provider, config, self.dates, console)
 
     def run(self, argv):
         """Route a command-line argument list to the matching handler.
@@ -251,9 +252,9 @@ class App:
     def track(self, args):
         """Dispatch ``jasem track`` to either logging or viewing.
 
-        Comma-separated input is a new entry; a bare duration with no comma is a
-        half-typed entry routed to the logger for its usage hint; anything else
-        is a view request.
+        Input that contains a comma or any recognisable duration is logged as a
+        new entry (parsed by AI); anything else is treated as a view request,
+        optionally scoped by ``today``/``week``/``all`` and a tag filter.
         """
         text = " ".join(args).strip()
         words = text.split()
@@ -268,36 +269,27 @@ class App:
         self._track_view(period, tag_filter)
 
     def _track_add(self, text):
-        """Parse ``<time>, <work>[, <date>][, <tag>]`` and append an entry."""
+        """Parse a free-text entry with AI and append it to the time log.
+
+        Falls back to the ``<time>, <work>[, <date>][, <tag>]`` comma format
+        when the AI backend is unavailable (handled by the parser).
+        """
         console = self.console
-        parts = [part.strip() for part in text.split(",") if part.strip()]
-        if len(parts) < 2:
-            console.print(console.red('usage: jasem track "<time>, <work>[, <date>][, <tag>]"'))
-            console.print(console.dim('  e.g.  jasem track "2h, coding"'))
-            console.print(console.dim('        jasem track "30 min, coding, yesterday, work"'))
-            return
         today = dt.date.today()
-        time_text, work, extra = parts[0], parts[1], parts[2:]
-        date_value, tag = "", ""
-        for item in extra:
-            resolved = self.dates.resolve(item, today)
-            if resolved and not date_value:
-                date_value = resolved
-            elif not tag:
-                tag = item
-        date_value = date_value or today.isoformat()
-        tag = tag or "work"
+        fields = self.time_parser.parse(text, today)
+        minutes = fields.pop("minutes")
+        entry = TimeEntry(**fields)
         entries = self.timelog.load()
-        entries.append(TimeEntry(date=date_value, time_text=time_text, work=work, tag=tag))
+        entries.append(entry)
         self.timelog.save(entries)
-        when = "today" if date_value == today.isoformat() else date_value
+        when = "today" if entry.date == today.isoformat() else entry.date
         console.print(" ".join([
-            console.green("✓ tracked"), console.bold(time_text), console.dim("·"),
-            work, console.dim(f"· {when} · #{tag}"),
+            console.green("✓ tracked"), console.bold(entry.time_text), console.dim("·"),
+            entry.work, console.dim(f"· {when} · #{entry.tag}"),
         ]))
-        if parse_minutes(time_text) == 0:
+        if minutes == 0:
             console.warn(console.yellow(
-                f"  (couldn't read a duration from {time_text!r}; "
+                f"  (couldn't read a duration from {text!r}; "
                 "stored as-is, won't count toward totals)"
             ))
 

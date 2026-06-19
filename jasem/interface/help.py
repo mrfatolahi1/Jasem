@@ -45,21 +45,21 @@ def render_help(console, config):
         row("jasem set <id> category", example("work finance")
             + note("  (space/comma-separated; ") + example("none") + note(" clears)")),
 
-        header("TIME TRACKING") + note("  log durations as plain text; date blank = today, tag blank = work"),
-        "  " + command('jasem track "') + example("2h, coding") + command('"'),
-        "  " + command('jasem track "') + example("30 min, coding, yesterday, work") + command('"'),
-        "  " + note("format: ") + example('"<time>, <work>[, <date>][, <tag>]"'),
+        header("TIME TRACKING") + note("  describe the work naturally; duration, date & tag auto-detected"),
+        "  " + command('jasem track "') + example("1h45min debugging the parser yesterday, work") + command('"'),
+        "  " + command('jasem track "') + example("spent half an hour on emails") + command('"'),
+        "  " + note("commas optional; date blank = today, tag blank = work"),
         row("jasem track", "today's entries, with a daily total"),
         row("jasem track week", "last 7 days, grouped by day"),
         row("jasem track all", "everything; append a tag to filter, e.g. " + command("jasem track week work")),
 
-        header("AI PARSING") + note("  the only step that calls a model; pick a backend with JASEM_PROVIDER"),
+        header("AI PARSING") + note("  add & track call a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", note("local, no key — run ") + command("ollama serve") + note(" + a small model")),
         row("  openai", note("any OpenAI-compatible API — set ") + example("JASEM_API_KEY")
             + note(" (+ ") + example("JASEM_OPENAI_API_BASE") + note(" or ") + example("OPENAI_BASE_URL")
             + note(" for non-OpenAI hosts)")),
         row("  anthropic", note("Claude — set ") + example("JASEM_PROVIDER=anthropic") + note(" + ") + example("JASEM_API_KEY")),
-        "  " + note("if the backend is unreachable, the task is still saved (regex dates, no tags)."),
+        "  " + note("if the backend is unreachable, entries are still saved (regex dates; track falls back to the comma format)."),
 
         header("FILES & CONFIG"),
         row("  provider", example(config.provider) + note("   (JASEM_PROVIDER: ollama · openai · anthropic)")),

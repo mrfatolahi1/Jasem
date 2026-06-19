@@ -11,11 +11,11 @@ class AnthropicProvider(AIProvider):
         """Return the configured Anthropic base URL, or the public default."""
         return self.config.api_base or "https://api.anthropic.com"
 
-    def parse(self, prompt):
+    def parse(self, prompt, schema=TASK_SCHEMA):
         """Call the Messages API and read the forced ``tool_use`` input.
 
         Returns:
-            The decoded task fields.
+            The decoded fields matching ``schema``.
 
         Raises:
             ValueError: If the response contains no ``tool_use`` block.
@@ -25,11 +25,11 @@ class AnthropicProvider(AIProvider):
             "model": self.config.model,
             "max_tokens": 1024,
             "tools": [{
-                "name": "record_task",
-                "description": "Record the structured fields extracted from the task.",
-                "input_schema": TASK_SCHEMA,
+                "name": "record_fields",
+                "description": "Record the structured fields extracted from the input.",
+                "input_schema": schema,
             }],
-            "tool_choice": {"type": "tool", "name": "record_task"},
+            "tool_choice": {"type": "tool", "name": "record_fields"},
             "messages": [{"role": "user", "content": prompt}],
         }
         response = request_json(self.base_url() + "/v1/messages", body, headers)
