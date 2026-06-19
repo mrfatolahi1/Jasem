@@ -14,7 +14,6 @@ ANSI_CODES = {
     "bold": "1",
     "cyan": "36",
 }
-"""Mapping of semantic style names to ANSI SGR codes."""
 
 
 class Console:

@@ -17,13 +17,8 @@ FALLBACK_MODEL = "qwen2.5:3b"
 
 
 def clean_base_url(value):
-    """Normalise a base URL by trimming whitespace and any trailing slash.
-
-    Args:
-        value: Raw environment value, possibly ``None``.
-
-    Returns:
-        The cleaned URL, or an empty string when ``value`` is falsy.
+    """
+    Normalise a base URL by trimming whitespace and any trailing slash.
     """
     return (value or "").strip().rstrip("/")
 
