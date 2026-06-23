@@ -36,7 +36,8 @@ and tags for you.
 - **Views & edits** — `jasem list`, `today`, `week`, `overdue`,
   `done 3`, `set 3 deadline tomorrow`, `rm 3`.
 - **Time tracking** — `jasem track "1h 30min, code review, work"`, then
-  `jasem track week` for per-day totals.
+  `jasem track week` for per-day totals; fix or drop an entry with
+  `jasem track set 3 time 2h` and `jasem track rm 3`.
 - **Plain-text storage** — everything lives in `~/.jasem/*.md`; read, grep,
   edit, sync, or version-control it however you like.
 - **Pluggable AI, local by default** — runs fully offline with
