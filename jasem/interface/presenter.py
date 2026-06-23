@@ -75,7 +75,8 @@ class Presenter:
             )
             for entry in day_entries:
                 tag = console.dim("#" + entry.tag) if entry.tag else ""
-                console.print(f"    {entry.time_text.rjust(9)}   {entry.work}  {tag}")
+                identifier = console.cyan(("#" + str(entry.id)).rjust(4))
+                console.print(f"    {identifier}  {entry.time_text.rjust(9)}   {entry.work}  {tag}")
         if len(by_date) > 1:
             console.print(
                 "\n  " + console.dim("total ") + console.bold(format_minutes(grand_total))
