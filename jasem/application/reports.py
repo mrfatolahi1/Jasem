@@ -5,13 +5,11 @@ no formatting, no color — so the maths can be unit-tested on its own and the
 presenter is left to render the resulting :class:`Report`.
 """
 
-import datetime as dt
+import datetime
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
 
 TOP_ACTIVITIES = 6
-"""How many activities the 'top activities' section keeps."""
-
 DAILY_TIMELINE_MAX = 31
 """Longest span, in days, still drawn one bar per day; longer spans go weekly."""
 
@@ -29,11 +27,11 @@ class Report:
     active_days: int = 0
     span_days: int = 0
     avg_per_active_day: int = 0
-    busiest_day: tuple = None  # (iso_date, minutes) or None when nothing tracked
-    by_tag: list = field(default_factory=list)  # [(tag, minutes)], minutes desc
-    top_activities: list = field(default_factory=list)  # [(work, minutes, count)]
-    timeline: list = field(default_factory=list)  # [(label, minutes)], chronological
-    timeline_unit: str = "day"  # "day" or "week"
+    busiest_day: tuple = None
+    by_tag: list = field(default_factory=list)
+    top_activities: list = field(default_factory=list)
+    timeline: list = field(default_factory=list)
+    timeline_unit: str = "day"
 
 
 def build_report(entries, start, end, today, label, tag_filter=None):
@@ -55,15 +53,15 @@ def build_report(entries, start, end, today, label, tag_filter=None):
     Returns:
         The populated :class:`Report`.
     """
-    start_date = dt.date.fromisoformat(start)
-    end_date = dt.date.fromisoformat(end)
+    start_date = datetime.date.fromisoformat(start)
+    end_date = datetime.date.fromisoformat(end)
     span_days = (end_date - start_date).days + 1
 
     total_minutes = 0
     entry_count = 0
     by_tag = defaultdict(int)
     by_day = defaultdict(int)
-    activities = {}  # normalized work -> [display, minutes, count]
+    activities = {}
     for entry in entries:
         minutes = entry.minutes()
         if minutes <= 0:
@@ -113,17 +111,17 @@ def _build_timeline(by_day, start_date, end_date, span_days):
         day = start_date
         while day <= end_date:
             buckets.append((day.strftime("%a %m-%d"), by_day.get(day.isoformat(), 0)))
-            day += dt.timedelta(days=1)
+            day += datetime.timedelta(days=1)
         return buckets, "day"
 
     weeks = OrderedDict()
-    monday = start_date - dt.timedelta(days=start_date.weekday())
+    monday = start_date - datetime.timedelta(days=start_date.weekday())
     while monday <= end_date:
         weeks[monday] = 0
-        monday += dt.timedelta(days=7)
+        monday += datetime.timedelta(days=7)
     for iso, minutes in by_day.items():
-        day = dt.date.fromisoformat(iso)
-        week_start = day - dt.timedelta(days=day.weekday())
+        day = datetime.date.fromisoformat(iso)
+        week_start = day - datetime.timedelta(days=day.weekday())
         if week_start in weeks:
             weeks[week_start] += minutes
     buckets = [("wk " + week.strftime("%m-%d"), minutes) for week, minutes in weeks.items()]
