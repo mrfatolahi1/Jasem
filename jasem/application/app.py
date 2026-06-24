@@ -12,6 +12,7 @@ from ..interface.presenter import Presenter
 from ..shared.dates import DateResolver
 from ..shared.durations import format_minutes, parse_minutes
 from .parsing import TaskParser, TimeEntryParser
+from .reports import build_report
 
 VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
 """Subcommands that render a filtered list of tasks."""
@@ -92,6 +93,8 @@ class App:
             self.set_field(rest)
         elif command == "track":
             self.track(rest)
+        elif command == "report":
+            self.report(rest)
         elif command == "add":
             if not rest:
                 self.console.print(self.console.red("usage: jasem add <description>"))
@@ -431,3 +434,33 @@ class App:
             selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
             header += "  ·  #" + tag_filter
         self.presenter.timelog(selected, header, today_iso)
+
+    def report(self, args):
+        """Render an aggregated time report for a period, optionally by tag.
+
+        Accepts an optional leading period (``today``/``week``/``month``/``all``,
+        default ``week``) and an optional trailing tag filter, mirroring the
+        argument shape of ``jasem track``'s views.
+        """
+        entries = self.timelog.load()
+        today = dt.date.today()
+        today_iso = today.isoformat()
+        words = list(args)
+        period = "week"
+        if words and words[0].lower() in ("today", "week", "month", "all"):
+            period = words.pop(0).lower()
+        tag_filter = words[0].lower() if words else None
+        if period == "all":
+            start = min((entry.date for entry in entries), default=today_iso)
+            label = "all time"
+        elif period == "today":
+            start, label = today_iso, "today"
+        elif period == "month":
+            start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
+        else:
+            start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
+        selected = [entry for entry in entries if start <= entry.date <= today_iso]
+        if tag_filter:
+            selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
+        report = build_report(selected, start, today_iso, today_iso, label, tag_filter)
+        self.presenter.report(report)

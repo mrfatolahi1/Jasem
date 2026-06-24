@@ -55,6 +55,11 @@ def render_help(console, config):
         row("jasem track rm <id>…", "delete tracked entries (ids shown in the views)"),
         row("jasem track set <id>", example("time 1h30min · work \"…\" · date yesterday · tag personal")),
 
+        header("REPORTS") + note("  stats + bar charts over tracked time; append a tag to filter"),
+        row("jasem report", "this week: totals, by-tag, daily timeline & top activities"),
+        row("jasem report month", "last 30 days"),
+        row("jasem report all", "everything, e.g. " + command("jasem report all work")),
+
         header("AI PARSING") + note("  add & track call a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", note("local, no key — run ") + command("ollama serve") + note(" + a small model")),
         row("  openai", note("any OpenAI-compatible API — set ") + example("JASEM_API_KEY")
