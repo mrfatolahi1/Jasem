@@ -10,6 +10,8 @@ class TimeEntry:
     """A single tracked block of time.
 
     Attributes:
+        id: Stable identifier, assigned by the store; used by
+            ``jasem track rm``/``set`` to address a specific entry.
         date: ISO date on which the work happened.
         time_text: The duration as a human-readable string (normalised to a
             ``"1h 45min"`` form when logged, but any hand-edited spelling that
@@ -18,10 +20,11 @@ class TimeEntry:
         tag: The category for the entry.
     """
 
-    date: str
-    time_text: str
-    work: str
-    tag: str
+    id: int = 0
+    date: str = ""
+    time_text: str = ""
+    work: str = ""
+    tag: str = ""
 
     def minutes(self):
         """Return the entry's duration in whole minutes (``0`` if unparseable)."""

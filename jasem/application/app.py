@@ -10,7 +10,7 @@ from ..infrastructure.storage import TaskStore, TimeLogStore
 from ..interface.help import render_help
 from ..interface.presenter import Presenter
 from ..shared.dates import DateResolver
-from ..shared.durations import parse_minutes
+from ..shared.durations import format_minutes, parse_minutes
 from .parsing import TaskParser, TimeEntryParser
 
 VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
@@ -26,11 +26,28 @@ FIELD_ALIASES = {
 }
 """Accepted aliases for each editable field of ``jasem set``."""
 
+TIME_FIELD_ALIASES = {
+    "time": {"time", "duration", "dur", "t"},
+    "work": {"work", "desc", "description", "w"},
+    "date": {"date", "day", "d"},
+    "tag": {"tag", "category", "categories", "c"},
+}
+"""Accepted aliases for each editable field of ``jasem track set``."""
+
 
 def resolve_field(name):
     """Return the canonical field name for an alias, or ``None`` if unknown."""
     lowered = name.lower()
     for field, aliases in FIELD_ALIASES.items():
+        if lowered in aliases:
+            return field
+    return None
+
+
+def resolve_time_field(name):
+    """Return the canonical time-entry field for an alias, or ``None``."""
+    lowered = name.lower()
+    for field, aliases in TIME_FIELD_ALIASES.items():
         if lowered in aliases:
             return field
     return None
@@ -250,12 +267,19 @@ class App:
             console.print(f"  {count:>3}  " + console.cyan("#" + tag))
 
     def track(self, args):
-        """Dispatch ``jasem track`` to either logging or viewing.
+        """Dispatch ``jasem track`` to logging, editing, removing, or viewing.
 
-        Input that contains a comma or any recognisable duration is logged as a
+        A bare ``rm``/``set`` first token manages existing entries. Otherwise,
+        input that contains a comma or any recognisable duration is logged as a
         new entry (parsed by AI); anything else is treated as a view request,
         optionally scoped by ``today``/``week``/``all`` and a tag filter.
         """
+        if args and args[0].lower() in ("rm", "remove", "del", "delete"):
+            self._track_remove(args[1:])
+            return
+        if args and args[0].lower() in ("set", "edit"):
+            self._track_set(args[1:])
+            return
         text = " ".join(args).strip()
         words = text.split()
         first = words[0].lower() if words else ""
@@ -280,6 +304,7 @@ class App:
         minutes = fields.pop("minutes")
         entry = TimeEntry(**fields)
         entries = self.timelog.load()
+        entry.id = self.timelog.next_id(entries)
         entries.append(entry)
         self.timelog.save(entries)
         when = "today" if entry.date == today.isoformat() else entry.date
@@ -292,6 +317,101 @@ class App:
                 f"  (couldn't read a duration from {text!r}; "
                 "stored as-is, won't count toward totals)"
             ))
+
+    def _track_remove(self, rest):
+        """Delete the time entries whose ids appear in ``rest``."""
+        console = self.console
+        ids = set()
+        for argument in rest:
+            try:
+                ids.add(int(argument))
+            except ValueError:
+                pass
+        if not ids:
+            console.print(console.red("usage: jasem track rm <id> [id...]"))
+            console.print(console.dim(
+                '  (to log work that starts with "rm", quote it: '
+                'jasem track "rm ...")'
+            ))
+            return
+        entries = self.timelog.load()
+        kept = [entry for entry in entries if entry.id not in ids]
+        removed = len(entries) - len(kept)
+        self.timelog.save(kept)
+        console.print(
+            console.green(f"✓ removed {removed} time entr{'y' if removed == 1 else 'ies'}")
+            if removed else console.red("no matching id(s)")
+        )
+
+    def _track_set(self, args):
+        """Update one field of a time entry identified by its id."""
+        console = self.console
+        if len(args) < 3:
+            console.print(console.red("usage: jasem track set <id> <time|work|date|tag> <value>"))
+            console.print(console.dim("  e.g.  jasem track set 3 time 1h30min"))
+            console.print(console.dim('        jasem track set 3 work "reviewing the PR"'))
+            console.print(console.dim("        jasem track set 3 date yesterday"))
+            console.print(console.dim("        jasem track set 3 tag personal"))
+            return
+        try:
+            identifier = int(args[0])
+        except ValueError:
+            console.print(console.red(f"not a valid id: {args[0]}"))
+            return
+        field = resolve_time_field(args[1])
+        if not field:
+            console.print(console.red(f"unknown field: {args[1]}"))
+            console.print(console.dim("  fields: time · work · date · tag"))
+            return
+        entries = self.timelog.load()
+        entry = next((item for item in entries if item.id == identifier), None)
+        if entry is None:
+            console.print(console.red(f"no time entry with id #{identifier}"))
+            return
+        message = self._apply_time_field(entry, field, " ".join(args[2:]).strip())
+        if message is None:
+            return
+        self.timelog.save(entries)
+        console.print(console.green(f"✓ #{identifier} updated:") + " " + message)
+        console.print(console.dim("  " + entry.work))
+
+    def _apply_time_field(self, entry, field, value):
+        """Apply ``value`` to ``field`` of ``entry``.
+
+        Returns:
+            A confirmation message, or ``None`` when the value was rejected
+            (an explanation has already been printed).
+        """
+        console = self.console
+        if field == "time":
+            minutes = parse_minutes(value)
+            if minutes > 0:
+                entry.time_text = format_minutes(minutes)
+                return f"time → {entry.time_text}"
+            entry.time_text = value
+            console.warn(console.yellow(
+                f"  (couldn't read a duration from {value!r}; "
+                "stored as-is, won't count toward totals)"
+            ))
+            return f"time → {value}"
+        if field == "date":
+            resolved = self.dates.resolve(value, dt.date.today())
+            if not resolved:
+                console.print(console.red(f"could not understand date: {value!r}"))
+                console.print(console.dim(
+                    "  try: today · yesterday · last friday · june 20 · 2026-07-01"
+                ))
+                return None
+            entry.date = resolved
+            return f"date → {resolved}"
+        if field == "tag":
+            if value.lower() in CLEAR_WORDS:
+                entry.tag = "work"
+                return "tag → work"
+            entry.tag = value
+            return f"tag → {value}"
+        entry.work = value
+        return f"work → {value}"
 
     def _track_view(self, period, tag_filter):
         """Render the time log for a period, optionally filtered by tag."""

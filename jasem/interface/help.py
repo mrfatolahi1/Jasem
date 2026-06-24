@@ -52,6 +52,8 @@ def render_help(console, config):
         row("jasem track", "today's entries, with a daily total"),
         row("jasem track week", "last 7 days, grouped by day"),
         row("jasem track all", "everything; append a tag to filter, e.g. " + command("jasem track week work")),
+        row("jasem track rm <id>…", "delete tracked entries (ids shown in the views)"),
+        row("jasem track set <id>", example("time 1h30min · work \"…\" · date yesterday · tag personal")),
 
         header("AI PARSING") + note("  add & track call a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", note("local, no key — run ") + command("ollama serve") + note(" + a small model")),
