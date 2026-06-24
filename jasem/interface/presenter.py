@@ -47,42 +47,6 @@ class Presenter:
         identifier = console.cyan(str(task.id).rjust(3))
         return f"{mark} {identifier}  [{priority}]  {deadline}  {title}  {tags}"
 
-    def timelog(self, entries, header, today):
-        """Print ``entries`` grouped by date with per-day and grand totals.
-
-        Args:
-            entries: The time entries to display.
-            header: Section title.
-            today: ISO date used to label the current day.
-        """
-        console = self.console
-        if not entries:
-            console.print(console.bold(header))
-            console.print(console.dim("  (nothing tracked)"))
-            return
-        by_date = {}
-        for entry in entries:
-            by_date.setdefault(entry.date, []).append(entry)
-        grand_total = 0
-        console.print(console.bold(header))
-        for date in sorted(by_date, reverse=True):
-            day_entries = by_date[date]
-            day_total = sum(entry.minutes() for entry in day_entries)
-            grand_total += day_total
-            label = date + (" (today)" if date == today else "")
-            console.print(
-                "\n  " + console.bold(console.cyan(label))
-                + console.dim("  —  ") + console.bold(format_minutes(day_total))
-            )
-            for entry in day_entries:
-                tag = console.dim("#" + entry.tag) if entry.tag else ""
-                identifier = console.cyan(("#" + str(entry.id)).rjust(4))
-                console.print(f"    {identifier}  {entry.time_text.rjust(9)}   {entry.work}  {tag}")
-        if len(by_date) > 1:
-            console.print(
-                "\n  " + console.dim("total ") + console.bold(format_minutes(grand_total))
-            )
-
     def report(self, report):
         """Print an aggregated time :class:`~jasem.application.reports.Report`.
 

@@ -270,12 +270,11 @@ class App:
             console.print(f"  {count:>3}  " + console.cyan("#" + tag))
 
     def track(self, args):
-        """Dispatch ``jasem track`` to logging, editing, removing, or viewing.
+        """Dispatch ``jasem track`` to logging, editing, or removing entries.
 
-        A bare ``rm``/``set`` first token manages existing entries. Otherwise,
-        input that contains a comma or any recognisable duration is logged as a
-        new entry (parsed by AI); anything else is treated as a view request,
-        optionally scoped by ``today``/``week``/``all`` and a tag filter.
+        A bare ``rm``/``set`` first token manages existing entries; any other
+        text is logged as a new entry (parsed by AI). Reviewing tracked time
+        now lives in ``jasem report``.
         """
         if args and args[0].lower() in ("rm", "remove", "del", "delete"):
             self._track_remove(args[1:])
@@ -284,16 +283,13 @@ class App:
             self._track_set(args[1:])
             return
         text = " ".join(args).strip()
-        words = text.split()
-        first = words[0].lower() if words else ""
-        if "," in text or (first not in ("today", "week", "all") and parse_minutes(text)):
-            self._track_add(text)
+        if not text:
+            console = self.console
+            console.print(console.red('usage: jasem track "<what you did>"'))
+            console.print(console.dim('  e.g.  jasem track "1h45min debugging the parser, work"'))
+            console.print(console.dim("  review tracked time with ") + console.green("jasem report"))
             return
-        period = "today"
-        if words and words[0] in ("today", "week", "all"):
-            period = words.pop(0)
-        tag_filter = words[0].lower() if words else None
-        self._track_view(period, tag_filter)
+        self._track_add(text)
 
     def _track_add(self, text):
         """Parse a free-text entry with AI and append it to the time log.
@@ -312,8 +308,8 @@ class App:
         self.timelog.save(entries)
         when = "today" if entry.date == today.isoformat() else entry.date
         console.print(" ".join([
-            console.green("✓ tracked"), console.bold(entry.time_text), console.dim("·"),
-            entry.work, console.dim(f"· {when} · #{entry.tag}"),
+            console.green(f"✓ tracked #{entry.id}"), console.bold(entry.time_text),
+            console.dim("·"), entry.work, console.dim(f"· {when} · #{entry.tag}"),
         ]))
         if minutes == 0:
             console.warn(console.yellow(
@@ -415,25 +411,6 @@ class App:
             return f"tag → {value}"
         entry.work = value
         return f"work → {value}"
-
-    def _track_view(self, period, tag_filter):
-        """Render the time log for a period, optionally filtered by tag."""
-        entries = self.timelog.load()
-        today = dt.date.today()
-        today_iso = today.isoformat()
-        if period == "all":
-            selected, header = entries, "Time log — all"
-        elif period == "week":
-            since = (today - dt.timedelta(days=6)).isoformat()
-            selected = [entry for entry in entries if entry.date >= since]
-            header = "Time log — last 7 days"
-        else:
-            selected = [entry for entry in entries if entry.date == today_iso]
-            header = "Time log — today"
-        if tag_filter:
-            selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
-            header += "  ·  #" + tag_filter
-        self.presenter.timelog(selected, header, today_iso)
 
     def report(self, args):
         """Render an aggregated time report for a period, optionally by tag.
