@@ -64,6 +64,9 @@ class Config:
         self.track_file = os.path.expanduser(
             env.get("JASEM_TRACK_FILE", os.path.join(self.directory, "timelog.md"))
         )
+        self.spend_file = os.path.expanduser(
+            env.get("JASEM_SPEND_FILE", os.path.join(self.directory, "spending.md"))
+        )
         self.jalali = env.get("JASEM_JALALI", "").strip().lower() in (
             "1",
             "true",

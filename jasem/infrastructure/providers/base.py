@@ -28,6 +28,19 @@ TIME_ENTRY_SCHEMA = {
 }
 """JSON schema describing the fields ``jasem track`` extracts."""
 
+SPENDING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "amount": {"type": "number"},
+        "text": {"type": "string"},
+        "date_phrase": {"type": "string"},
+        "date": {"type": "string"},
+        "tag": {"type": "string"},
+    },
+    "required": ["amount", "text", "date_phrase", "date", "tag"],
+}
+"""JSON schema describing the fields ``jasem acc`` extracts."""
+
 
 class AIProvider(ABC):
     """Abstract base for backends that extract structured fields from free text."""
