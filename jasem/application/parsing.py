@@ -4,7 +4,12 @@ import datetime as dt
 import urllib.error
 
 from ..domain.task import PRIORITY_RANK
-from ..infrastructure.providers.base import TASK_SCHEMA, TIME_ENTRY_SCHEMA
+from ..infrastructure.providers.base import (
+    SPENDING_SCHEMA,
+    TASK_SCHEMA,
+    TIME_ENTRY_SCHEMA,
+)
+from ..shared.amounts import format_amount, parse_amount
 from ..shared.durations import format_minutes, parse_minutes
 
 _RULES = (
@@ -245,4 +250,137 @@ class TimeEntryParser:
         return (
             f"Today is {today.isoformat()} ({today.strftime('%A')}).\n"
             f"{_TRACK_RULES}\n{_TRACK_EXAMPLES}\nText: {text}"
+        )
+
+
+_SPEND_RULES = (
+    "Extract a single money-spending record from the text below.\n"
+    "- amount: the amount of money spent as a NUMBER (50k -> 50000, "
+    "1.5m -> 1500000, 1,200 -> 1200); 0 if no amount is stated.\n"
+    "- text: short description of what the money was spent on, WITHOUT the "
+    "amount, date, or tag words.\n"
+    "- date_phrase: the exact temporal words as written, for example "
+    "yesterday / monday / june 18; empty string if none.\n"
+    "- date: your best YYYY-MM-DD guess for when it was spent, empty string "
+    "if none.\n"
+    "- tag: one short category word such as food, transport, rent, bills; "
+    "empty string if none.\n"
+)
+"""Field-extraction instructions sent to the model for ``jasem acc``."""
+
+_SPEND_EXAMPLES = (
+    'Example. Text: "50k lunch with the team yesterday, food" -> '
+    '{"amount": 50000, "text": "lunch with the team", "date_phrase": "yesterday", '
+    '"date": "", "tag": "food"}\n'
+    'Example. Text: "spent 1.5m on a new phone" -> '
+    '{"amount": 1500000, "text": "a new phone", "date_phrase": "", '
+    '"date": "", "tag": ""}\n'
+)
+"""Few-shot examples appended to the spending prompt."""
+
+
+class SpendingParser:
+    """Produces structured spending fields, falling back to comma parsing on error.
+
+    Mirrors :class:`TimeEntryParser`: the model turns free text into an amount, a
+    description, a date, and a tag, and an unreachable or misconfigured backend
+    degrades to a ``<amount>, <text>[, <date>][, <tag>]`` comma format instead of
+    failing.
+    """
+
+    def __init__(self, provider_factory, config, date_resolver, console):
+        """Wire the parser to its collaborators.
+
+        Args:
+            provider_factory: Callable taking the config and returning an
+                :class:`~jasem.infrastructure.providers.base.AIProvider`.
+            config: The resolved :class:`~jasem.shared.config.Config`.
+            date_resolver: Resolver turning phrases into ISO dates.
+            console: Console used to report backend failures.
+        """
+        self._provider_factory = provider_factory
+        self.config = config
+        self.dates = date_resolver
+        self.console = console
+
+    def parse(self, text, today=None):
+        """Return spending fields for ``text``.
+
+        Attempts AI extraction first and falls back to comma parsing when the
+        backend is unreachable or returns something unusable. The result
+        contains ``date``, ``amount_text``, ``text``, ``tag``, and ``amount``;
+        ``amount_text`` is normalised to a canonical thousands-separated form so
+        the stored amount always parses back to ``amount``.
+
+        Args:
+            text: The user's free-text spending description.
+            today: Reference date; defaults to today.
+
+        Returns:
+            A dict ready to build a
+            :class:`~jasem.domain.spending.Spending` (plus ``amount``).
+        """
+        today = today or dt.date.today()
+        try:
+            provider = self._provider_factory(self.config)
+            fields = provider.parse(self._build_prompt(text, today), SPENDING_SCHEMA)
+            amount = self._coerce_amount(fields.get("amount"))
+            description = (fields.get("text") or text).strip()
+            date_value = self.dates.resolve(
+                fields.get("date_phrase", ""), today, fields.get("date", "")
+            )
+            if not date_value:
+                date_value = self.dates.resolve(text, today)
+            tag = str(fields.get("tag", "") or "").strip()
+        except (urllib.error.URLError, urllib.error.HTTPError) as error:
+            self.console.warn(self.console.red(
+                f"! Couldn't parse with the {self.config.provider} backend ({error}); "
+                "recorded with plain parsing."
+            ))
+            amount, description, date_value, tag = self._local_fallback(text, today)
+        except Exception as error:
+            self.console.warn(self.console.red(f"! Parse error ({error}); recorded raw text."))
+            amount, description, date_value, tag = self._local_fallback(text, today)
+        return {
+            "date": date_value or today.isoformat(),
+            "amount_text": format_amount(amount) if amount > 0 else text.strip(),
+            "text": description,
+            "tag": tag or "general",
+            "amount": amount,
+        }
+
+    def _local_fallback(self, text, today):
+        """Parse the ``<amount>, <text>[, <date>][, <tag>]`` form locally.
+
+        Returns:
+            An ``(amount, text, date, tag)`` tuple. With no comma, the whole
+            text is treated as the description and scanned for an amount.
+        """
+        parts = [part.strip() for part in text.split(",") if part.strip()]
+        if len(parts) >= 2:
+            amount_text, description, extra = parts[0], parts[1], parts[2:]
+        else:
+            amount_text, description, extra = text.strip(), text.strip(), []
+        date_value, tag = "", ""
+        for item in extra:
+            resolved = self.dates.resolve(item, today)
+            if resolved and not date_value:
+                date_value = resolved
+            elif not tag:
+                tag = item
+        return parse_amount(amount_text), description, date_value, tag
+
+    @staticmethod
+    def _coerce_amount(value):
+        """Return ``value`` as a non-negative float, or ``0.0`` when not a number."""
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return parse_amount(str(value))
+
+    def _build_prompt(self, text, today):
+        """Assemble the spending prompt for ``text`` relative to ``today``."""
+        return (
+            f"Today is {today.isoformat()} ({today.strftime('%A')}).\n"
+            f"{_SPEND_RULES}\n{_SPEND_EXAMPLES}\nText: {text}"
         )
