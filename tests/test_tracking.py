@@ -222,5 +222,48 @@ class TrackManageTests(unittest.TestCase):
         self.assertEqual(self._entry(1).tag, "personal")
 
 
+class JalaliTrackTests(unittest.TestCase):
+    """Jalali mode shows Persian dates while storing Gregorian on disk."""
+
+    def setUp(self):
+        """An app with JASEM_JALALI on, writing to a temp log."""
+        self.tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmpdir)
+        self.config = Config({
+            "JASEM_TRACK_FILE": os.path.join(self.tmpdir, "timelog.md"),
+            "JASEM_FILE": os.path.join(self.tmpdir, "tasks.md"),
+            "JASEM_JALALI": "true",
+        })
+        self.console = RecordingConsole()
+        self.app = App(self.config, self.console)
+
+    def _output(self):
+        """Return everything printed to the console buffer so far."""
+        return self.console.stream.getvalue()
+
+    def test_jalali_input_stored_gregorian_shown_jalali(self):
+        """A typed Jalali date is stored Gregorian and echoed back in Jalali."""
+        provider = FakeProvider(
+            {"minutes": 60, "work": "coding", "date_phrase": "1404-04-04",
+             "date": "", "tag": "work"}
+        )
+        self.app.time_parser._provider_factory = lambda config: provider
+        self.app.run(["track", "1h coding 1404-04-04"])
+        entry = self.app.timelog.load()[0]
+        self.assertEqual(entry.date, "2025-06-25")
+        self.assertIn("1404-04-04", self._output())
+        self.assertNotIn("2025-06-25", self._output())
+
+    def test_set_date_accepts_jalali_input(self):
+        """``track set <id> date`` reads a Jalali date and stores Gregorian."""
+        self.app.timelog.save([
+            TimeEntry(id=1, date="2026-06-19", time_text="1h", work="x", tag="work"),
+        ])
+        self.app.run(["track", "set", "1", "date", "1405-04-04"])
+        entry = next(e for e in self.app.timelog.load() if e.id == 1)
+        self.assertEqual(entry.date, "2026-06-25")
+        self.assertIn("1405-04-04", self._output())
+
+
 if __name__ == "__main__":
     unittest.main()
