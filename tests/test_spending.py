@@ -110,9 +110,21 @@ class SpendingParserTests(unittest.TestCase):
         self.assertEqual(fields["amount"], 50000)
         self.assertEqual(fields["amount_text"], "50,000")
         self.assertEqual(fields["title"], "lunch with the team")
+        self.assertEqual(fields["description"], "")
         self.assertEqual(fields["tag"], "general")
         self.assertEqual(fields["date"], "2026-06-19")
         self.assertEqual(provider.calls[0][1], SPENDING_SCHEMA)
+
+    def test_keeps_description(self):
+        """A returned description is carried through to the fields."""
+        provider = FakeProvider(
+            {"amount": 1500000, "title": "a new phone",
+             "description": "the old one finally died",
+             "date_phrase": "", "date": "", "tag": ""}
+        )
+        fields = make_parser(provider).parse("1.5m new phone", TODAY)
+        self.assertEqual(fields["title"], "a new phone")
+        self.assertEqual(fields["description"], "the old one finally died")
 
     def test_resolves_relative_date_phrase(self):
         """A ``date_phrase`` is resolved relative to today."""
@@ -236,6 +248,29 @@ class AccManageTests(unittest.TestCase):
         self._seed()
         self.app.run(["acc", "set", "1", "title", "dinner", "out"])
         self.assertEqual(self._record(1).title, "dinner out")
+
+    def test_set_description(self):
+        """``acc set <id> description …`` stores a longer note."""
+        self._seed()
+        self.app.run(["acc", "set", "1", "description", "team", "celebration"])
+        self.assertEqual(self._record(1).description, "team celebration")
+
+    def test_set_description_clear(self):
+        """A clear word empties the description."""
+        self.app.spending.save([
+            Spending(id=1, date="2026-06-19", amount_text="50,000",
+                     title="lunch", description="with the team", tag="food"),
+        ])
+        self.app.run(["acc", "set", "1", "description", "none"])
+        self.assertEqual(self._record(1).description, "")
+
+    def test_description_round_trips(self):
+        """A saved description survives a reload."""
+        self.app.spending.save([
+            Spending(id=1, date="2026-06-19", amount_text="50,000",
+                     title="lunch", description="with the team", tag="food"),
+        ])
+        self.assertEqual(self._record(1).description, "with the team")
 
     def test_set_amount_normalises(self):
         """A parseable amount is stored in canonical form."""

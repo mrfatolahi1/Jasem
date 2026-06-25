@@ -17,6 +17,7 @@ class Spending:
             ``format_amount`` form when recorded, but any hand-edited number
             :func:`~jasem.shared.amounts.parse_amount` understands is fine).
         title: A short summary of what the money was spent on.
+        description: A longer, optional note with any extra detail.
         tag: The category for the record.
     """
 
@@ -24,6 +25,7 @@ class Spending:
     date: str = ""
     amount_text: str = ""
     title: str = ""
+    description: str = ""
     tag: str = ""
 
     def amount(self):

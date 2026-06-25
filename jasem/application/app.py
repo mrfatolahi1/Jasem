@@ -41,6 +41,7 @@ TIME_FIELD_ALIASES = {
 SPEND_FIELD_ALIASES = {
     "amount": {"amount", "amt", "cost", "price", "a"},
     "title": {"title", "text", "name", "t"},
+    "description": {"description", "desc", "note", "notes", "details"},
     "date": {"date", "day", "d"},
     "tag": {"tag", "category", "categories", "c"},
 }
@@ -509,7 +510,7 @@ class App:
     def _acc_add(self, text):
         """Parse a free-text record with AI and append it to the spending log.
 
-        Falls back to the ``<amount>, <text>[, <date>][, <tag>]`` comma format
+        Falls back to the ``<amount>, <title>[, <date>][, <tag>]`` comma format
         when the AI backend is unavailable (handled by the parser).
         """
         console = self.console
@@ -526,6 +527,8 @@ class App:
             console.green(f"✓ recorded #{record.id}"), console.bold(format_amount(record.amount())),
             console.dim("·"), record.title, console.dim(f"· {when} · #{record.tag}"),
         ]))
+        if record.description:
+            console.print(console.dim("  " + record.description))
         if amount == 0:
             console.warn(console.yellow(
                 f"  (couldn't read an amount from {text!r}; "
@@ -561,9 +564,11 @@ class App:
         """Update one field of a spending record identified by its id."""
         console = self.console
         if len(args) < 3:
-            console.print(console.red("usage: jasem acc set <id> <amount|title|date|tag> <value>"))
+            console.print(console.red(
+                "usage: jasem acc set <id> <amount|title|description|date|tag> <value>"))
             console.print(console.dim("  e.g.  jasem acc set 3 amount 60k"))
             console.print(console.dim('        jasem acc set 3 title "dinner out"'))
+            console.print(console.dim('        jasem acc set 3 description "team celebration"'))
             console.print(console.dim("        jasem acc set 3 date yesterday"))
             console.print(console.dim("        jasem acc set 3 tag food"))
             return
@@ -575,7 +580,7 @@ class App:
         field = resolve_spend_field(args[1])
         if not field:
             console.print(console.red(f"unknown field: {args[1]}"))
-            console.print(console.dim("  fields: amount · title · date · tag"))
+            console.print(console.dim("  fields: amount · title · description · date · tag"))
             return
         records = self.spending.load()
         record = next((item for item in records if item.id == identifier), None)
@@ -625,6 +630,12 @@ class App:
                 return "tag → general"
             record.tag = value
             return f"tag → {value}"
+        if field == "description":
+            if value.lower() in CLEAR_WORDS:
+                record.description = ""
+                return "description cleared"
+            record.description = value
+            return f"description → {value}"
         record.title = value
         return f"title → {value}"
 

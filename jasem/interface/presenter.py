@@ -170,7 +170,8 @@ class Presenter:
         date = self.calendar.format_iso(record.date) or "—"
         amount = console.bold(format_amount(record.amount()).rjust(12))
         tag = console.dim("#" + record.tag) if record.tag else ""
-        return f"{identifier}  {date}  {amount}  {record.title}  {tag}"
+        note = console.dim("— " + record.description) if record.description else ""
+        return f"{identifier}  {date}  {amount}  {record.title}  {note}  {tag}"
 
     def spending_report(self, report):
         """Print an aggregated spending

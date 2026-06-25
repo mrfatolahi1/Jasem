@@ -259,6 +259,8 @@ _SPEND_RULES = (
     "1.5m -> 1500000, 1,200 -> 1200); 0 if no amount is stated.\n"
     "- title: short summary of what the money was spent on, WITHOUT the "
     "amount, date, or tag words.\n"
+    "- description: any extra detail worth keeping as a longer note; "
+    "empty string if none.\n"
     "- date_phrase: the exact temporal words as written, for example "
     "yesterday / monday / june 18; empty string if none.\n"
     "- date: your best YYYY-MM-DD guess for when it was spent, empty string "
@@ -270,10 +272,11 @@ _SPEND_RULES = (
 
 _SPEND_EXAMPLES = (
     'Example. Text: "50k lunch with the team yesterday, food" -> '
-    '{"amount": 50000, "title": "lunch with the team", "date_phrase": "yesterday", '
-    '"date": "", "tag": "food"}\n'
-    'Example. Text: "spent 1.5m on a new phone" -> '
-    '{"amount": 1500000, "title": "a new phone", "date_phrase": "", '
+    '{"amount": 50000, "title": "lunch with the team", "description": "", '
+    '"date_phrase": "yesterday", "date": "", "tag": "food"}\n'
+    'Example. Text: "spent 1.5m on a new phone, the old one finally died" -> '
+    '{"amount": 1500000, "title": "a new phone", '
+    '"description": "the old one finally died", "date_phrase": "", '
     '"date": "", "tag": ""}\n'
 )
 """Few-shot examples appended to the spending prompt."""
@@ -308,7 +311,8 @@ class SpendingParser:
 
         Attempts AI extraction first and falls back to comma parsing when the
         backend is unreachable or returns something unusable. The result
-        contains ``date``, ``amount_text``, ``title``, ``tag``, and ``amount``;
+        contains ``date``, ``amount_text``, ``title``, ``description``, ``tag``,
+        and ``amount``;
         ``amount_text`` is normalised to a canonical thousands-separated form so
         the stored amount always parses back to ``amount``.
 
@@ -326,6 +330,7 @@ class SpendingParser:
             fields = provider.parse(self._build_prompt(text, today), SPENDING_SCHEMA)
             amount = self._coerce_amount(fields.get("amount"))
             title = (fields.get("title") or text).strip()
+            description = str(fields.get("description", "") or "").strip()
             date_value = self.dates.resolve(
                 fields.get("date_phrase", ""), today, fields.get("date", "")
             )
@@ -338,13 +343,16 @@ class SpendingParser:
                 "recorded with plain parsing."
             ))
             amount, title, date_value, tag = self._local_fallback(text, today)
+            description = ""
         except Exception as error:
             self.console.warn(self.console.red(f"! Parse error ({error}); recorded raw text."))
             amount, title, date_value, tag = self._local_fallback(text, today)
+            description = ""
         return {
             "date": date_value or today.isoformat(),
             "amount_text": format_amount(amount) if amount > 0 else text.strip(),
             "title": title,
+            "description": description,
             "tag": tag or "general",
             "amount": amount,
         }
