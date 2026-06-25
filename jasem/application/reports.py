@@ -9,6 +9,8 @@ import datetime
 from collections import OrderedDict, defaultdict
 from dataclasses import dataclass, field
 
+from ..shared.calendar_view import CalendarView
+
 TOP_ACTIVITIES = 6
 DAILY_TIMELINE_MAX = 31
 """Longest span, in days, still drawn one bar per day; longer spans go weekly."""
@@ -34,7 +36,7 @@ class Report:
     timeline_unit: str = "day"
 
 
-def build_report(entries, start, end, today, label, tag_filter=None):
+def build_report(entries, start, end, today, label, tag_filter=None, calendar=None):
     """Aggregate ``entries`` (already scoped to ``start``..``end``) into a Report.
 
     Only entries with a parseable, positive duration count toward the totals,
@@ -49,6 +51,8 @@ def build_report(entries, start, end, today, label, tag_filter=None):
             caller's date context stays in one place).
         label: Human label for the period, e.g. ``"last 7 days"``.
         tag_filter: The tag the period was filtered by, or ``None``.
+        calendar: Optional :class:`~jasem.shared.calendar_view.CalendarView` used
+            to format timeline labels; Gregorian when omitted.
 
     Returns:
         The populated :class:`Report`.
@@ -84,7 +88,9 @@ def build_report(entries, start, end, today, label, tag_filter=None):
     top_activities = [(display, minutes, count)
                       for display, minutes, count in top[:TOP_ACTIVITIES]]
 
-    timeline, timeline_unit = _build_timeline(by_day, start_date, end_date, span_days)
+    timeline, timeline_unit = _build_timeline(
+        by_day, start_date, end_date, span_days, calendar
+    )
 
     return Report(
         label=label, start=start, end=end, tag_filter=tag_filter,
@@ -96,21 +102,25 @@ def build_report(entries, start, end, today, label, tag_filter=None):
     )
 
 
-def _build_timeline(by_day, start_date, end_date, span_days):
+def _build_timeline(by_day, start_date, end_date, span_days, calendar=None):
     """Bucket per-day minutes into a chronological, zero-filled timeline.
 
     One bucket per day for spans up to :data:`DAILY_TIMELINE_MAX`, otherwise one
-    bucket per ISO week so a long ``all`` report stays readable.
+    bucket per ISO week so a long ``all`` report stays readable. ``calendar``
+    formats the labels (Jalali or Gregorian); bucketing itself stays Gregorian.
 
     Returns:
         A ``(buckets, unit)`` pair where ``buckets`` is ``[(label, minutes)]``
         and ``unit`` is ``"day"`` or ``"week"``.
     """
+    calendar = calendar or CalendarView(False)
     if span_days <= DAILY_TIMELINE_MAX:
         buckets = []
         day = start_date
         while day <= end_date:
-            buckets.append((day.strftime("%a %m-%d"), by_day.get(day.isoformat(), 0)))
+            buckets.append(
+                (calendar.format_day_label(day), by_day.get(day.isoformat(), 0))
+            )
             day += datetime.timedelta(days=1)
         return buckets, "day"
 
@@ -124,5 +134,7 @@ def _build_timeline(by_day, start_date, end_date, span_days):
         week_start = day - datetime.timedelta(days=day.weekday())
         if week_start in weeks:
             weeks[week_start] += minutes
-    buckets = [("wk " + week.strftime("%m-%d"), minutes) for week, minutes in weeks.items()]
+    buckets = [
+        (calendar.format_week_label(week), minutes) for week, minutes in weeks.items()
+    ]
     return buckets, "week"

@@ -1,5 +1,6 @@
 """Rendering of tasks and time-log entries for the terminal."""
 
+from ..shared.calendar_view import CalendarView
 from ..shared.charts import BAR_WIDTH, bar
 from ..shared.durations import format_minutes
 
@@ -7,9 +8,10 @@ from ..shared.durations import format_minutes
 class Presenter:
     """Formats domain objects into styled console output."""
 
-    def __init__(self, console):
-        """Bind the presenter to a :class:`~jasem.console.Console`."""
+    def __init__(self, console, calendar=None):
+        """Bind the presenter to a :class:`~jasem.console.Console` and calendar view."""
         self.console = console
+        self.calendar = calendar or CalendarView(False)
 
     def tasks(self, tasks, header, today):
         """Print ``tasks`` under ``header``, sorted and colored by status.
@@ -31,7 +33,7 @@ class Presenter:
         """Return a single formatted, colored task row."""
         console = self.console
         mark = console.green("☑") if task.done else "☐"
-        deadline = task.deadline or "—"
+        deadline = self.calendar.format_iso(task.deadline) or "—"
         if not task.done and task.deadline:
             if task.deadline < today:
                 deadline = console.red(deadline + " (overdue)")
@@ -57,7 +59,9 @@ class Presenter:
             report: The aggregated figures to display.
         """
         console = self.console
-        title = f"Time report — {report.label} ({report.start} → {report.end})"
+        start = self.calendar.format_iso(report.start)
+        end = self.calendar.format_iso(report.end)
+        title = f"Time report — {report.label} ({start} → {end})"
         if report.tag_filter:
             title += "  ·  #" + report.tag_filter
         console.print(console.bold(title))
@@ -91,7 +95,8 @@ class Presenter:
         console.print(stat("avg active day", format_minutes(report.avg_per_active_day)))
         if report.busiest_day:
             date, minutes = report.busiest_day
-            console.print(stat("busiest day", f"{date}  ({format_minutes(minutes)})"))
+            shown = self.calendar.format_iso(date)
+            console.print(stat("busiest day", f"{shown}  ({format_minutes(minutes)})"))
 
     def _report_by_tag(self, report):
         """Print a horizontal bar chart of time per tag, with percentages."""

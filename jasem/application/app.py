@@ -9,6 +9,7 @@ from ..infrastructure.providers import get_provider
 from ..infrastructure.storage import TaskStore, TimeLogStore
 from ..interface.help import render_help
 from ..interface.presenter import Presenter
+from ..shared.calendar_view import CalendarView
 from ..shared.dates import DateResolver
 from ..shared.durations import format_minutes, parse_minutes
 from .parsing import TaskParser, TimeEntryParser
@@ -66,8 +67,9 @@ class App:
         """
         self.config = config
         self.console = console
-        self.dates = DateResolver()
-        self.presenter = Presenter(console)
+        self.calendar = CalendarView.from_config(config)
+        self.dates = DateResolver(self.calendar)
+        self.presenter = Presenter(console, self.calendar)
         self.tasks = TaskStore(config.task_file)
         self.timelog = TimeLogStore(config.track_file)
         self.parser = TaskParser(get_provider, config, self.dates, console)
@@ -112,7 +114,8 @@ class App:
         self.tasks.save(tasks)
         console = self.console
         console.print(" ".join([console.green("✓ added"), f"#{task.id}:", console.bold(task.title)]))
-        detail = f"  priority={task.priority}  deadline={task.deadline or 'no deadline'}"
+        shown_deadline = self.calendar.format_iso(task.deadline) or "no deadline"
+        detail = f"  priority={task.priority}  deadline={shown_deadline}"
         if task.tags:
             detail += f"  tags={task.tags}"
         console.print(console.dim(detail))
@@ -239,13 +242,14 @@ class App:
                 return "deadline cleared"
             resolved = self.dates.resolve(value, dt.date.today())
             if not resolved:
+                example = self.calendar.format_iso("2026-07-01")
                 console.print(console.red(f"could not understand deadline: {value!r}"))
                 console.print(console.dim(
-                    "  try: tomorrow · next friday · in 3 days · june 20 · 2026-07-01 · none"
+                    f"  try: tomorrow · next friday · in 3 days · june 20 · {example} · none"
                 ))
                 return None
             task.deadline = resolved
-            return f"deadline → {resolved}"
+            return f"deadline → {self.calendar.format_iso(resolved)}"
         if value.lower() in CLEAR_WORDS:
             task.tags = ""
             return "category cleared"
@@ -306,7 +310,7 @@ class App:
         entry.id = self.timelog.next_id(entries)
         entries.append(entry)
         self.timelog.save(entries)
-        when = "today" if entry.date == today.isoformat() else entry.date
+        when = "today" if entry.date == today.isoformat() else self.calendar.format_iso(entry.date)
         console.print(" ".join([
             console.green(f"✓ tracked #{entry.id}"), console.bold(entry.time_text),
             console.dim("·"), entry.work, console.dim(f"· {when} · #{entry.tag}"),
@@ -396,13 +400,14 @@ class App:
         if field == "date":
             resolved = self.dates.resolve(value, dt.date.today())
             if not resolved:
+                example = self.calendar.format_iso("2026-07-01")
                 console.print(console.red(f"could not understand date: {value!r}"))
                 console.print(console.dim(
-                    "  try: today · yesterday · last friday · june 20 · 2026-07-01"
+                    f"  try: today · yesterday · last friday · june 20 · {example}"
                 ))
                 return None
             entry.date = resolved
-            return f"date → {resolved}"
+            return f"date → {self.calendar.format_iso(resolved)}"
         if field == "tag":
             if value.lower() in CLEAR_WORDS:
                 entry.tag = "work"
@@ -439,5 +444,7 @@ class App:
         selected = [entry for entry in entries if start <= entry.date <= today_iso]
         if tag_filter:
             selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
-        report = build_report(selected, start, today_iso, today_iso, label, tag_filter)
+        report = build_report(
+            selected, start, today_iso, today_iso, label, tag_filter, self.calendar
+        )
         self.presenter.report(report)

@@ -4,6 +4,8 @@ import calendar
 import datetime as dt
 import re
 
+from .calendar_view import CalendarView
+
 _WEEKDAYS = {name.lower(): index for index, name in enumerate(calendar.day_name)}
 _WEEKDAYS.update({name.lower(): index for index, name in enumerate(calendar.day_abbr)})
 """Weekday names and abbreviations mapped to ``date.weekday()`` indices."""
@@ -17,7 +19,17 @@ NO_DATE = {"", "none", "no deadline", "no date", "n/a", "na", "null", "someday",
 
 
 class DateResolver:
-    """Converts temporal phrases into ``YYYY-MM-DD`` strings."""
+    """Converts temporal phrases into Gregorian ``YYYY-MM-DD`` strings.
+
+    Relative phrases (``tomorrow``, ``next friday``, ``in 3 days``) are calendar
+    agnostic. An explicit date the user types is interpreted through the injected
+    :class:`~jasem.shared.calendar_view.CalendarView`, so in Jalali mode a typed
+    Jalali date is converted to its Gregorian equivalent before storage.
+    """
+
+    def __init__(self, calendar=None):
+        """Bind the resolver to a calendar view (Gregorian pass-through by default)."""
+        self.calendar = calendar or CalendarView(False)
 
     def resolve(self, phrase, today, llm_date=""):
         """Resolve a phrase to an ISO date relative to ``today``.
@@ -44,10 +56,9 @@ class DateResolver:
 
         iso = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", text)
         if iso:
-            try:
-                return dt.date(int(iso[1]), int(iso[2]), int(iso[3])).isoformat()
-            except ValueError:
-                pass
+            resolved = self.calendar.parse_explicit(int(iso[1]), int(iso[2]), int(iso[3]))
+            if resolved:
+                return resolved
 
         offset = re.search(r"\bin\s+(\d+)\s+(day|week|month)s?\b", text)
         if offset:
