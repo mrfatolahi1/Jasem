@@ -60,6 +60,22 @@ export JASEM_OPENAI_API_BASE=https://openrouter.ai/api/v1  # or OPENAI_BASE_URL
 export JASEM_PROVIDER=anthropic JASEM_API_KEY=sk-ant-...
 ```
 
+## Persian (Jalali) calendar
+
+Set `JASEM_JALALI=true` to work in the Persian (Jalali/Shamsi) calendar:
+
+```sh
+export JASEM_JALALI=true
+jasem "pay rent 1405-04-10, finance"   # type deadlines in Jalali
+jasem list                              # dates are shown in Jalali
+```
+
+Every date jasem **shows** is Jalali and every explicit date you **type** is read
+as Jalali — but your data on disk stays Gregorian ISO (`YYYY-MM-DD`), so the same
+files work with or without the flag. Relative phrases (`tomorrow`, `next friday`,
+`in 3 days`) work in both modes. Leave the variable unset (or `false`) for the
+default Gregorian calendar.
+
 ## More
 
 Run **`jasem help`** for the full command reference, every option, and all
