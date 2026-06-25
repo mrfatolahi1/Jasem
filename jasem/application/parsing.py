@@ -257,7 +257,7 @@ _SPEND_RULES = (
     "Extract a single money-spending record from the text below.\n"
     "- amount: the amount of money spent as a NUMBER (50k -> 50000, "
     "1.5m -> 1500000, 1,200 -> 1200); 0 if no amount is stated.\n"
-    "- text: short description of what the money was spent on, WITHOUT the "
+    "- title: short summary of what the money was spent on, WITHOUT the "
     "amount, date, or tag words.\n"
     "- date_phrase: the exact temporal words as written, for example "
     "yesterday / monday / june 18; empty string if none.\n"
@@ -270,10 +270,10 @@ _SPEND_RULES = (
 
 _SPEND_EXAMPLES = (
     'Example. Text: "50k lunch with the team yesterday, food" -> '
-    '{"amount": 50000, "text": "lunch with the team", "date_phrase": "yesterday", '
+    '{"amount": 50000, "title": "lunch with the team", "date_phrase": "yesterday", '
     '"date": "", "tag": "food"}\n'
     'Example. Text: "spent 1.5m on a new phone" -> '
-    '{"amount": 1500000, "text": "a new phone", "date_phrase": "", '
+    '{"amount": 1500000, "title": "a new phone", "date_phrase": "", '
     '"date": "", "tag": ""}\n'
 )
 """Few-shot examples appended to the spending prompt."""
@@ -308,7 +308,7 @@ class SpendingParser:
 
         Attempts AI extraction first and falls back to comma parsing when the
         backend is unreachable or returns something unusable. The result
-        contains ``date``, ``amount_text``, ``text``, ``tag``, and ``amount``;
+        contains ``date``, ``amount_text``, ``title``, ``tag``, and ``amount``;
         ``amount_text`` is normalised to a canonical thousands-separated form so
         the stored amount always parses back to ``amount``.
 
@@ -325,7 +325,7 @@ class SpendingParser:
             provider = self._provider_factory(self.config)
             fields = provider.parse(self._build_prompt(text, today), SPENDING_SCHEMA)
             amount = self._coerce_amount(fields.get("amount"))
-            description = (fields.get("text") or text).strip()
+            title = (fields.get("title") or text).strip()
             date_value = self.dates.resolve(
                 fields.get("date_phrase", ""), today, fields.get("date", "")
             )
@@ -337,30 +337,30 @@ class SpendingParser:
                 f"! Couldn't parse with the {self.config.provider} backend ({error}); "
                 "recorded with plain parsing."
             ))
-            amount, description, date_value, tag = self._local_fallback(text, today)
+            amount, title, date_value, tag = self._local_fallback(text, today)
         except Exception as error:
             self.console.warn(self.console.red(f"! Parse error ({error}); recorded raw text."))
-            amount, description, date_value, tag = self._local_fallback(text, today)
+            amount, title, date_value, tag = self._local_fallback(text, today)
         return {
             "date": date_value or today.isoformat(),
             "amount_text": format_amount(amount) if amount > 0 else text.strip(),
-            "text": description,
+            "title": title,
             "tag": tag or "general",
             "amount": amount,
         }
 
     def _local_fallback(self, text, today):
-        """Parse the ``<amount>, <text>[, <date>][, <tag>]`` form locally.
+        """Parse the ``<amount>, <title>[, <date>][, <tag>]`` form locally.
 
         Returns:
-            An ``(amount, text, date, tag)`` tuple. With no comma, the whole
-            text is treated as the description and scanned for an amount.
+            An ``(amount, title, date, tag)`` tuple. With no comma, the whole
+            text is treated as the title and scanned for an amount.
         """
         parts = [part.strip() for part in text.split(",") if part.strip()]
         if len(parts) >= 2:
-            amount_text, description, extra = parts[0], parts[1], parts[2:]
+            amount_text, title, extra = parts[0], parts[1], parts[2:]
         else:
-            amount_text, description, extra = text.strip(), text.strip(), []
+            amount_text, title, extra = text.strip(), text.strip(), []
         date_value, tag = "", ""
         for item in extra:
             resolved = self.dates.resolve(item, today)
@@ -368,7 +368,7 @@ class SpendingParser:
                 date_value = resolved
             elif not tag:
                 tag = item
-        return parse_amount(amount_text), description, date_value, tag
+        return parse_amount(amount_text), title, date_value, tag
 
     @staticmethod
     def _coerce_amount(value):

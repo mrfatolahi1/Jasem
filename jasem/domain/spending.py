@@ -16,14 +16,14 @@ class Spending:
         amount_text: The amount as a stored string (normalised to a
             ``format_amount`` form when recorded, but any hand-edited number
             :func:`~jasem.shared.amounts.parse_amount` understands is fine).
-        text: A short description of what the money was spent on.
+        title: A short summary of what the money was spent on.
         tag: The category for the record.
     """
 
     id: int = 0
     date: str = ""
     amount_text: str = ""
-    text: str = ""
+    title: str = ""
     tag: str = ""
 
     def amount(self):

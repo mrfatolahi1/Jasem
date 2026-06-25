@@ -69,7 +69,7 @@ def render_help(console, config):
         "  " + note("commas optional; date blank = today, tag blank = general; recording prints the id"),
         row("jasem acc list [tag]", "recorded spending, oldest first, optionally by category"),
         row("jasem acc rm <id>…", "delete spending record(s)"),
-        row("jasem acc set <id>", example('amount 60k · text "…" · date yesterday · tag food')),
+        row("jasem acc set <id>", example('amount 60k · title "…" · date yesterday · tag food')),
         row("jasem acc report", "totals, by-tag, timeline & top spends (period + tag like report)"),
         row("jasem acc tags", "list spending categories in use, with counts"),
 

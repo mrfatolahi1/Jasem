@@ -40,7 +40,7 @@ TIME_FIELD_ALIASES = {
 
 SPEND_FIELD_ALIASES = {
     "amount": {"amount", "amt", "cost", "price", "a"},
-    "text": {"text", "desc", "description", "note", "w"},
+    "title": {"title", "text", "name", "t"},
     "date": {"date", "day", "d"},
     "tag": {"tag", "category", "categories", "c"},
 }
@@ -524,7 +524,7 @@ class App:
         when = "today" if record.date == today.isoformat() else self.calendar.format_iso(record.date)
         console.print(" ".join([
             console.green(f"✓ recorded #{record.id}"), console.bold(format_amount(record.amount())),
-            console.dim("·"), record.text, console.dim(f"· {when} · #{record.tag}"),
+            console.dim("·"), record.title, console.dim(f"· {when} · #{record.tag}"),
         ]))
         if amount == 0:
             console.warn(console.yellow(
@@ -561,9 +561,9 @@ class App:
         """Update one field of a spending record identified by its id."""
         console = self.console
         if len(args) < 3:
-            console.print(console.red("usage: jasem acc set <id> <amount|text|date|tag> <value>"))
+            console.print(console.red("usage: jasem acc set <id> <amount|title|date|tag> <value>"))
             console.print(console.dim("  e.g.  jasem acc set 3 amount 60k"))
-            console.print(console.dim('        jasem acc set 3 text "dinner out"'))
+            console.print(console.dim('        jasem acc set 3 title "dinner out"'))
             console.print(console.dim("        jasem acc set 3 date yesterday"))
             console.print(console.dim("        jasem acc set 3 tag food"))
             return
@@ -575,7 +575,7 @@ class App:
         field = resolve_spend_field(args[1])
         if not field:
             console.print(console.red(f"unknown field: {args[1]}"))
-            console.print(console.dim("  fields: amount · text · date · tag"))
+            console.print(console.dim("  fields: amount · title · date · tag"))
             return
         records = self.spending.load()
         record = next((item for item in records if item.id == identifier), None)
@@ -587,7 +587,7 @@ class App:
             return
         self.spending.save(records)
         console.print(console.green(f"✓ #{identifier} updated:") + " " + message)
-        console.print(console.dim("  " + record.text))
+        console.print(console.dim("  " + record.title))
 
     def _apply_spend_field(self, record, field, value):
         """Apply ``value`` to ``field`` of ``record``.
@@ -625,8 +625,8 @@ class App:
                 return "tag → general"
             record.tag = value
             return f"tag → {value}"
-        record.text = value
-        return f"text → {value}"
+        record.title = value
+        return f"title → {value}"
 
     def _acc_list(self, filters):
         """Render recorded spending, optionally filtered by a category."""

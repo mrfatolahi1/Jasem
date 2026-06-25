@@ -103,13 +103,13 @@ class SpendingParserTests(unittest.TestCase):
     def test_normalises_amount_and_applies_defaults(self):
         """Amount becomes a canonical ``amount_text`` and blanks get defaults."""
         provider = FakeProvider(
-            {"amount": 50000, "text": "lunch with the team",
+            {"amount": 50000, "title": "lunch with the team",
              "date_phrase": "", "date": "", "tag": ""}
         )
         fields = make_parser(provider).parse("50k lunch with the team", TODAY)
         self.assertEqual(fields["amount"], 50000)
         self.assertEqual(fields["amount_text"], "50,000")
-        self.assertEqual(fields["text"], "lunch with the team")
+        self.assertEqual(fields["title"], "lunch with the team")
         self.assertEqual(fields["tag"], "general")
         self.assertEqual(fields["date"], "2026-06-19")
         self.assertEqual(provider.calls[0][1], SPENDING_SCHEMA)
@@ -117,7 +117,7 @@ class SpendingParserTests(unittest.TestCase):
     def test_resolves_relative_date_phrase(self):
         """A ``date_phrase`` is resolved relative to today."""
         provider = FakeProvider(
-            {"amount": 30000, "text": "snacks", "date_phrase": "yesterday",
+            {"amount": 30000, "title": "snacks", "date_phrase": "yesterday",
              "date": "", "tag": "food"}
         )
         fields = make_parser(provider).parse("30k snacks yesterday", TODAY)
@@ -126,7 +126,7 @@ class SpendingParserTests(unittest.TestCase):
     def test_coerces_string_amount(self):
         """An amount returned as a string is still understood."""
         provider = FakeProvider(
-            {"amount": "1500000", "text": "phone", "date_phrase": "", "date": "", "tag": ""}
+            {"amount": "1500000", "title": "phone", "date_phrase": "", "date": "", "tag": ""}
         )
         fields = make_parser(provider).parse("1.5m phone", TODAY)
         self.assertEqual(fields["amount"], 1500000)
@@ -135,7 +135,7 @@ class SpendingParserTests(unittest.TestCase):
     def test_zero_amount_keeps_raw_text(self):
         """With no amount the original text is stored as-is for visibility."""
         provider = FakeProvider(
-            {"amount": 0, "text": "groceries", "date_phrase": "", "date": "", "tag": ""}
+            {"amount": 0, "title": "groceries", "date_phrase": "", "date": "", "tag": ""}
         )
         fields = make_parser(provider).parse("bought some groceries", TODAY)
         self.assertEqual(fields["amount"], 0)
@@ -149,7 +149,7 @@ class SpendingParserTests(unittest.TestCase):
         fields = parser.parse("50k, lunch, yesterday, food", TODAY)
         self.assertEqual(fields["amount"], 50000)
         self.assertEqual(fields["amount_text"], "50,000")
-        self.assertEqual(fields["text"], "lunch")
+        self.assertEqual(fields["title"], "lunch")
         self.assertEqual(fields["date"], "2026-06-18")
         self.assertEqual(fields["tag"], "food")
         self.assertTrue(console.warnings)
@@ -171,7 +171,7 @@ class AccCommandTests(unittest.TestCase):
         """A free-text record is parsed, normalised, and persisted."""
         app = App(self.config, RecordingConsole())
         provider = FakeProvider(
-            {"amount": 50000, "text": "lunch", "date_phrase": "today",
+            {"amount": 50000, "title": "lunch", "date_phrase": "today",
              "date": "", "tag": "food"}
         )
         app.spend_parser._provider_factory = lambda config: provider
@@ -180,7 +180,7 @@ class AccCommandTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].amount_text, "50,000")
         self.assertEqual(records[0].amount(), 50000)
-        self.assertEqual(records[0].text, "lunch")
+        self.assertEqual(records[0].title, "lunch")
         self.assertEqual(records[0].id, 1)
 
 
@@ -201,8 +201,8 @@ class AccManageTests(unittest.TestCase):
     def _seed(self):
         """Persist two known records with ids 1 and 2."""
         self.app.spending.save([
-            Spending(id=1, date="2026-06-19", amount_text="50,000", text="lunch", tag="food"),
-            Spending(id=2, date="2026-06-18", amount_text="20,000", text="taxi", tag="transport"),
+            Spending(id=1, date="2026-06-19", amount_text="50,000", title="lunch", tag="food"),
+            Spending(id=2, date="2026-06-18", amount_text="20,000", title="taxi", tag="transport"),
         ])
 
     def _record(self, identifier):
@@ -212,7 +212,7 @@ class AccManageTests(unittest.TestCase):
     def test_add_assigns_incrementing_ids(self):
         """Successive recorded entries receive 1, 2, … via ``next_id``."""
         provider = FakeProvider(
-            {"amount": 10000, "text": "a", "date_phrase": "today", "date": "", "tag": "food"}
+            {"amount": 10000, "title": "a", "date_phrase": "today", "date": "", "tag": "food"}
         )
         self.app.spend_parser._provider_factory = lambda config: provider
         self.app.run(["acc", "10k a today"])
@@ -231,11 +231,11 @@ class AccManageTests(unittest.TestCase):
         self.app.run(["acc", "rm", "99"])
         self.assertEqual(len(self.app.spending.load()), 2)
 
-    def test_set_text(self):
-        """``acc set <id> text …`` joins the remaining words."""
+    def test_set_title(self):
+        """``acc set <id> title …`` joins the remaining words."""
         self._seed()
-        self.app.run(["acc", "set", "1", "text", "dinner", "out"])
-        self.assertEqual(self._record(1).text, "dinner out")
+        self.app.run(["acc", "set", "1", "title", "dinner", "out"])
+        self.assertEqual(self._record(1).title, "dinner out")
 
     def test_set_amount_normalises(self):
         """A parseable amount is stored in canonical form."""
@@ -285,7 +285,7 @@ class JalaliAccTests(unittest.TestCase):
     def test_jalali_input_stored_gregorian_shown_jalali(self):
         """A typed Jalali date is stored Gregorian and echoed back in Jalali."""
         provider = FakeProvider(
-            {"amount": 30000, "text": "snacks", "date_phrase": "1404-04-04",
+            {"amount": 30000, "title": "snacks", "date_phrase": "1404-04-04",
              "date": "", "tag": "food"}
         )
         self.app.spend_parser._provider_factory = lambda config: provider
@@ -298,7 +298,7 @@ class JalaliAccTests(unittest.TestCase):
     def test_set_date_accepts_jalali_input(self):
         """``acc set <id> date`` reads a Jalali date and stores Gregorian."""
         self.app.spending.save([
-            Spending(id=1, date="2026-06-19", amount_text="10,000", text="x", tag="food"),
+            Spending(id=1, date="2026-06-19", amount_text="10,000", title="x", tag="food"),
         ])
         self.app.run(["acc", "set", "1", "date", "1405-04-04"])
         record = next(r for r in self.app.spending.load() if r.id == 1)
