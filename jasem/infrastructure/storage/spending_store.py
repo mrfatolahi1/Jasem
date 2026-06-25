@@ -3,7 +3,7 @@
 from ...domain.spending import Spending
 from .markdown_table import MarkdownTable, sanitize
 
-_COLUMNS = ["ID", "Date", "Amount", "Text", "Tag"]
+_COLUMNS = ["ID", "Date", "Amount", "Title", "Description", "Tag"]
 """Ordered spending-log table columns."""
 
 _PREAMBLE = (
@@ -32,8 +32,9 @@ class SpendingStore:
                 id=identifier,
                 date=cells[1],
                 amount_text=cells[2],
-                text=cells[3],
-                tag=cells[4],
+                title=cells[3],
+                description=cells[4],
+                tag=cells[5],
             ))
         return records
 
@@ -44,7 +45,8 @@ class SpendingStore:
                 str(record.id),
                 record.date,
                 sanitize(record.amount_text),
-                sanitize(record.text),
+                sanitize(record.title),
+                sanitize(record.description),
                 sanitize(record.tag) or "general",
             ]
             for record in records

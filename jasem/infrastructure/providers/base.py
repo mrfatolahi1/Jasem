@@ -32,12 +32,13 @@ SPENDING_SCHEMA = {
     "type": "object",
     "properties": {
         "amount": {"type": "number"},
-        "text": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
         "date_phrase": {"type": "string"},
         "date": {"type": "string"},
         "tag": {"type": "string"},
     },
-    "required": ["amount", "text", "date_phrase", "date", "tag"],
+    "required": ["amount", "title", "description", "date_phrase", "date", "tag"],
 }
 """JSON schema describing the fields ``jasem acc`` extracts."""
 

@@ -160,8 +160,8 @@ def build_spending_report(records, start, end, today, label, tag_filter=None, ca
         total_amount += amount
         by_tag[record.tag or "untagged"] += amount
         by_day[record.date] += amount
-        key = record.text.strip().lower()
-        bucket = spends.setdefault(key, [record.text.strip() or "—", 0.0, 0])
+        key = record.title.strip().lower()
+        bucket = spends.setdefault(key, [record.title.strip() or "—", 0.0, 0])
         bucket[1] += amount
         bucket[2] += 1
 
