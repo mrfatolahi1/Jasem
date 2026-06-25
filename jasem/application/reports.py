@@ -102,6 +102,92 @@ def build_report(entries, start, end, today, label, tag_filter=None, calendar=No
     )
 
 
+@dataclass
+class SpendingReport:
+    """The fully aggregated figures behind a single ``jasem acc report`` run."""
+
+    label: str = ""
+    start: str = ""
+    end: str = ""
+    tag_filter: str = None
+    total_amount: float = 0.0
+    record_count: int = 0
+    active_days: int = 0
+    span_days: int = 0
+    avg_per_active_day: float = 0.0
+    biggest_day: tuple = None
+    by_tag: list = field(default_factory=list)
+    top_spends: list = field(default_factory=list)
+    timeline: list = field(default_factory=list)
+    timeline_unit: str = "day"
+
+
+def build_spending_report(records, start, end, today, label, tag_filter=None, calendar=None):
+    """Aggregate ``records`` (already scoped to ``start``..``end``) into a report.
+
+    Only records with a parseable, positive amount count toward the totals,
+    matching ``jasem acc``'s rule that an unreadable amount ``won't count toward
+    totals``.
+
+    Args:
+        records: The :class:`~jasem.domain.spending.Spending` objects in period.
+        start: Inclusive ISO start date of the period.
+        end: Inclusive ISO end date of the period.
+        today: ISO date of the current day (accepted so the caller's date
+            context stays in one place; unused by the maths).
+        label: Human label for the period, e.g. ``"last 7 days"``.
+        tag_filter: The tag the period was filtered by, or ``None``.
+        calendar: Optional :class:`~jasem.shared.calendar_view.CalendarView` used
+            to format timeline labels; Gregorian when omitted.
+
+    Returns:
+        The populated :class:`SpendingReport`.
+    """
+    start_date = datetime.date.fromisoformat(start)
+    end_date = datetime.date.fromisoformat(end)
+    span_days = (end_date - start_date).days + 1
+
+    total_amount = 0.0
+    record_count = 0
+    by_tag = defaultdict(float)
+    by_day = defaultdict(float)
+    spends = {}
+    for record in records:
+        amount = record.amount()
+        if amount <= 0:
+            continue
+        record_count += 1
+        total_amount += amount
+        by_tag[record.tag or "untagged"] += amount
+        by_day[record.date] += amount
+        key = record.text.strip().lower()
+        bucket = spends.setdefault(key, [record.text.strip() or "—", 0.0, 0])
+        bucket[1] += amount
+        bucket[2] += 1
+
+    active_days = len(by_day)
+    biggest_day = max(by_day.items(), key=lambda kv: kv[1]) if by_day else None
+    avg_per_active_day = round(total_amount / active_days) if active_days else 0
+
+    by_tag_sorted = sorted(by_tag.items(), key=lambda kv: (-kv[1], kv[0]))
+    top = sorted(spends.values(), key=lambda v: (-v[1], v[0].lower()))
+    top_spends = [(display, amount, count)
+                  for display, amount, count in top[:TOP_ACTIVITIES]]
+
+    timeline, timeline_unit = _build_timeline(
+        by_day, start_date, end_date, span_days, calendar
+    )
+
+    return SpendingReport(
+        label=label, start=start, end=end, tag_filter=tag_filter,
+        total_amount=total_amount, record_count=record_count,
+        active_days=active_days, span_days=span_days,
+        avg_per_active_day=avg_per_active_day, biggest_day=biggest_day,
+        by_tag=by_tag_sorted, top_spends=top_spends,
+        timeline=timeline, timeline_unit=timeline_unit,
+    )
+
+
 def _build_timeline(by_day, start_date, end_date, span_days, calendar=None):
     """Bucket per-day minutes into a chronological, zero-filled timeline.
 

@@ -3,17 +3,19 @@
 import datetime as dt
 import re
 
+from ..domain.spending import Spending
 from ..domain.task import PRIORITY_RANK, Task
 from ..domain.time_entry import TimeEntry
 from ..infrastructure.providers import get_provider
-from ..infrastructure.storage import TaskStore, TimeLogStore
+from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore
 from ..interface.help import render_help
 from ..interface.presenter import Presenter
+from ..shared.amounts import format_amount, parse_amount
 from ..shared.calendar_view import CalendarView
 from ..shared.dates import DateResolver
 from ..shared.durations import format_minutes, parse_minutes
-from .parsing import TaskParser, TimeEntryParser
-from .reports import build_report
+from .parsing import SpendingParser, TaskParser, TimeEntryParser
+from .reports import build_report, build_spending_report
 
 VIEW_NAMES = {"list", "ls", "all", "today", "week", "overdue"}
 """Subcommands that render a filtered list of tasks."""
@@ -36,6 +38,14 @@ TIME_FIELD_ALIASES = {
 }
 """Accepted aliases for each editable field of ``jasem track set``."""
 
+SPEND_FIELD_ALIASES = {
+    "amount": {"amount", "amt", "cost", "price", "a"},
+    "text": {"text", "desc", "description", "note", "w"},
+    "date": {"date", "day", "d"},
+    "tag": {"tag", "category", "categories", "c"},
+}
+"""Accepted aliases for each editable field of ``jasem acc set``."""
+
 
 def resolve_field(name):
     """Return the canonical field name for an alias, or ``None`` if unknown."""
@@ -50,6 +60,15 @@ def resolve_time_field(name):
     """Return the canonical time-entry field for an alias, or ``None``."""
     lowered = name.lower()
     for field, aliases in TIME_FIELD_ALIASES.items():
+        if lowered in aliases:
+            return field
+    return None
+
+
+def resolve_spend_field(name):
+    """Return the canonical spending field for an alias, or ``None``."""
+    lowered = name.lower()
+    for field, aliases in SPEND_FIELD_ALIASES.items():
         if lowered in aliases:
             return field
     return None
@@ -72,8 +91,10 @@ class App:
         self.presenter = Presenter(console, self.calendar)
         self.tasks = TaskStore(config.task_file)
         self.timelog = TimeLogStore(config.track_file)
+        self.spending = SpendingStore(config.spend_file)
         self.parser = TaskParser(get_provider, config, self.dates, console)
         self.time_parser = TimeEntryParser(get_provider, config, self.dates, console)
+        self.spend_parser = SpendingParser(get_provider, config, self.dates, console)
 
     def run(self, argv):
         """Route a command-line argument list to the matching handler.
@@ -95,6 +116,8 @@ class App:
             self.set_field(rest)
         elif command == "track":
             self.track(rest)
+        elif command == "acc":
+            self.acc(rest)
         elif command == "report":
             self.report(rest)
         elif command == "add":
@@ -448,3 +471,215 @@ class App:
             selected, start, today_iso, today_iso, label, tag_filter, self.calendar
         )
         self.presenter.report(report)
+
+    def acc(self, args):
+        """Dispatch ``jasem acc`` to recording, listing, editing, or reporting.
+
+        A bare ``rm``/``set``/``list``/``report``/``tags`` first token manages
+        existing records or views; any other text is recorded as a new spending
+        entry (parsed by AI, with a comma-format fallback when the backend is
+        unavailable).
+        """
+        head = args[0].lower() if args else ""
+        if head in ("rm", "remove", "del", "delete"):
+            self._acc_remove(args[1:])
+            return
+        if head in ("set", "edit"):
+            self._acc_set(args[1:])
+            return
+        if head in ("list", "ls"):
+            self._acc_list(args[1:])
+            return
+        if head == "report":
+            self._acc_report(args[1:])
+            return
+        if head == "tags":
+            self._acc_tags()
+            return
+        text = " ".join(args).strip()
+        if not text:
+            console = self.console
+            console.print(console.red('usage: jasem acc "<what you spent on>"'))
+            console.print(console.dim('  e.g.  jasem acc "50k lunch with the team, food"'))
+            console.print(console.dim("  list records with ") + console.green("jasem acc list")
+                          + console.dim(" · review with ") + console.green("jasem acc report"))
+            return
+        self._acc_add(text)
+
+    def _acc_add(self, text):
+        """Parse a free-text record with AI and append it to the spending log.
+
+        Falls back to the ``<amount>, <text>[, <date>][, <tag>]`` comma format
+        when the AI backend is unavailable (handled by the parser).
+        """
+        console = self.console
+        today = dt.date.today()
+        fields = self.spend_parser.parse(text, today)
+        amount = fields.pop("amount")
+        record = Spending(**fields)
+        records = self.spending.load()
+        record.id = self.spending.next_id(records)
+        records.append(record)
+        self.spending.save(records)
+        when = "today" if record.date == today.isoformat() else self.calendar.format_iso(record.date)
+        console.print(" ".join([
+            console.green(f"✓ recorded #{record.id}"), console.bold(format_amount(record.amount())),
+            console.dim("·"), record.text, console.dim(f"· {when} · #{record.tag}"),
+        ]))
+        if amount == 0:
+            console.warn(console.yellow(
+                f"  (couldn't read an amount from {text!r}; "
+                "stored as-is, won't count toward totals)"
+            ))
+
+    def _acc_remove(self, rest):
+        """Delete the spending records whose ids appear in ``rest``."""
+        console = self.console
+        ids = set()
+        for argument in rest:
+            try:
+                ids.add(int(argument))
+            except ValueError:
+                pass
+        if not ids:
+            console.print(console.red("usage: jasem acc rm <id> [id...]"))
+            console.print(console.dim(
+                '  (to record spending that starts with "rm", quote it: '
+                'jasem acc "rm ...")'
+            ))
+            return
+        records = self.spending.load()
+        kept = [record for record in records if record.id not in ids]
+        removed = len(records) - len(kept)
+        self.spending.save(kept)
+        console.print(
+            console.green(f"✓ removed {removed} spending record(s)")
+            if removed else console.red("no matching id(s)")
+        )
+
+    def _acc_set(self, args):
+        """Update one field of a spending record identified by its id."""
+        console = self.console
+        if len(args) < 3:
+            console.print(console.red("usage: jasem acc set <id> <amount|text|date|tag> <value>"))
+            console.print(console.dim("  e.g.  jasem acc set 3 amount 60k"))
+            console.print(console.dim('        jasem acc set 3 text "dinner out"'))
+            console.print(console.dim("        jasem acc set 3 date yesterday"))
+            console.print(console.dim("        jasem acc set 3 tag food"))
+            return
+        try:
+            identifier = int(args[0])
+        except ValueError:
+            console.print(console.red(f"not a valid id: {args[0]}"))
+            return
+        field = resolve_spend_field(args[1])
+        if not field:
+            console.print(console.red(f"unknown field: {args[1]}"))
+            console.print(console.dim("  fields: amount · text · date · tag"))
+            return
+        records = self.spending.load()
+        record = next((item for item in records if item.id == identifier), None)
+        if record is None:
+            console.print(console.red(f"no spending record with id #{identifier}"))
+            return
+        message = self._apply_spend_field(record, field, " ".join(args[2:]).strip())
+        if message is None:
+            return
+        self.spending.save(records)
+        console.print(console.green(f"✓ #{identifier} updated:") + " " + message)
+        console.print(console.dim("  " + record.text))
+
+    def _apply_spend_field(self, record, field, value):
+        """Apply ``value`` to ``field`` of ``record``.
+
+        Returns:
+            A confirmation message, or ``None`` when the value was rejected
+            (an explanation has already been printed).
+        """
+        console = self.console
+        if field == "amount":
+            amount = parse_amount(value)
+            if amount > 0:
+                record.amount_text = format_amount(amount)
+                return f"amount → {record.amount_text}"
+            record.amount_text = value
+            console.warn(console.yellow(
+                f"  (couldn't read an amount from {value!r}; "
+                "stored as-is, won't count toward totals)"
+            ))
+            return f"amount → {value}"
+        if field == "date":
+            resolved = self.dates.resolve(value, dt.date.today())
+            if not resolved:
+                example = self.calendar.format_iso("2026-07-01")
+                console.print(console.red(f"could not understand date: {value!r}"))
+                console.print(console.dim(
+                    f"  try: today · yesterday · last friday · june 20 · {example}"
+                ))
+                return None
+            record.date = resolved
+            return f"date → {self.calendar.format_iso(resolved)}"
+        if field == "tag":
+            if value.lower() in CLEAR_WORDS:
+                record.tag = "general"
+                return "tag → general"
+            record.tag = value
+            return f"tag → {value}"
+        record.text = value
+        return f"text → {value}"
+
+    def _acc_list(self, filters):
+        """Render recorded spending, optionally filtered by a category."""
+        records = self.spending.load()
+        header = "Spending"
+        if filters:
+            tag = filters[0].strip().lower()
+            records = [record for record in records if record.tag.lower() == tag]
+            header += "  ·  #" + tag
+        self.presenter.spending(records, header)
+
+    def _acc_report(self, args):
+        """Render an aggregated spending report for a period, optionally by tag.
+
+        Accepts an optional leading period (``today``/``week``/``month``/``all``,
+        default ``week``) and an optional trailing tag filter, mirroring
+        ``jasem report``'s argument shape.
+        """
+        records = self.spending.load()
+        today = dt.date.today()
+        today_iso = today.isoformat()
+        words = list(args)
+        period = "week"
+        if words and words[0].lower() in ("today", "week", "month", "all"):
+            period = words.pop(0).lower()
+        tag_filter = words[0].lower() if words else None
+        if period == "all":
+            start = min((record.date for record in records), default=today_iso)
+            label = "all time"
+        elif period == "today":
+            start, label = today_iso, "today"
+        elif period == "month":
+            start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
+        else:
+            start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
+        selected = [record for record in records if start <= record.date <= today_iso]
+        if tag_filter:
+            selected = [record for record in selected if record.tag.lower() == tag_filter]
+        report = build_spending_report(
+            selected, start, today_iso, today_iso, label, tag_filter, self.calendar
+        )
+        self.presenter.spending_report(report)
+
+    def _acc_tags(self):
+        """Print each category in use across spending records with its count."""
+        counts = {}
+        for record in self.spending.load():
+            tag = record.tag or "general"
+            counts[tag] = counts.get(tag, 0) + 1
+        console = self.console
+        if not counts:
+            console.print(console.dim("  (no categories yet)"))
+            return
+        console.print(console.bold("Categories — spending"))
+        for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            console.print(f"  {count:>3}  " + console.cyan("#" + tag))

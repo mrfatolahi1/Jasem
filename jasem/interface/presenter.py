@@ -1,5 +1,6 @@
 """Rendering of tasks and time-log entries for the terminal."""
 
+from ..shared.amounts import format_amount
 from ..shared.calendar_view import CalendarView
 from ..shared.charts import BAR_WIDTH, bar
 from ..shared.durations import format_minutes
@@ -145,4 +146,119 @@ class Presenter:
             console.print(
                 f"    {name.ljust(width)}  {self._bar(minutes, max_minutes, 'cyan')}  "
                 + console.bold(format_minutes(minutes).rjust(9)) + tally
+            )
+
+    def spending(self, records, header):
+        """Print spending ``records`` under ``header``, oldest first.
+
+        Args:
+            records: The spending records to display.
+            header: Section title.
+        """
+        console = self.console
+        if not records:
+            console.print(console.dim("  (nothing here)"))
+            return
+        console.print(console.bold(header))
+        for record in sorted(records, key=lambda item: (item.date, item.id)):
+            console.print("  " + self._spending_line(record))
+
+    def _spending_line(self, record):
+        """Return a single formatted, colored spending row."""
+        console = self.console
+        identifier = console.cyan(str(record.id).rjust(3))
+        date = self.calendar.format_iso(record.date) or "—"
+        amount = console.bold(format_amount(record.amount()).rjust(12))
+        tag = console.dim("#" + record.tag) if record.tag else ""
+        return f"{identifier}  {date}  {amount}  {record.text}  {tag}"
+
+    def spending_report(self, report):
+        """Print an aggregated spending
+        :class:`~jasem.application.reports.SpendingReport`.
+
+        Renders a title, a summary stats block, and three bar-chart sections
+        (by tag, a daily/weekly timeline, and top spends).
+
+        Args:
+            report: The aggregated figures to display.
+        """
+        console = self.console
+        start = self.calendar.format_iso(report.start)
+        end = self.calendar.format_iso(report.end)
+        title = f"Spending report — {report.label} ({start} → {end})"
+        if report.tag_filter:
+            title += "  ·  #" + report.tag_filter
+        console.print(console.bold(title))
+        if report.record_count == 0:
+            console.print(console.dim("  (nothing recorded)"))
+            return
+        self._spending_summary(report)
+        self._spending_by_tag(report)
+        self._spending_timeline(report)
+        self._spending_top(report)
+
+    def _spending_summary(self, report):
+        """Print the headline numbers: total, records, active days, averages."""
+        console = self.console
+
+        def stat(label, value):
+            return "  " + console.dim(label.ljust(15)) + console.bold(value)
+
+        console.print("")
+        console.print(stat("total", format_amount(report.total_amount)))
+        console.print(stat("records", str(report.record_count)))
+        console.print(stat("active days", f"{report.active_days} of {report.span_days}"))
+        console.print(stat("avg active day", format_amount(report.avg_per_active_day)))
+        if report.biggest_day:
+            date, amount = report.biggest_day
+            shown = self.calendar.format_iso(date)
+            console.print(stat("biggest day", f"{shown}  ({format_amount(amount)})"))
+
+    def _spending_by_tag(self, report):
+        """Print a horizontal bar chart of spending per tag, with percentages."""
+        if not report.by_tag:
+            return
+        console = self.console
+        console.print("\n  " + console.bold(console.cyan("By tag")))
+        max_amount = max(amount for _, amount in report.by_tag)
+        width = max(len(tag) for tag, _ in report.by_tag) + 1
+        for tag, amount in report.by_tag:
+            pct = round(amount / report.total_amount * 100) if report.total_amount else 0
+            label = console.cyan(("#" + tag).ljust(width))
+            console.print(
+                f"    {label}  {self._bar(amount, max_amount, 'cyan')}  "
+                + console.bold(format_amount(amount).rjust(12))
+                + console.dim(f"  {pct:>3}%")
+            )
+
+    def _spending_timeline(self, report):
+        """Print a per-day (or per-week) bar chart across the whole period."""
+        if not report.timeline:
+            return
+        console = self.console
+        heading = "Weekly timeline" if report.timeline_unit == "week" else "Daily timeline"
+        console.print("\n  " + console.bold(console.cyan(heading)))
+        max_amount = max((amount for _, amount in report.timeline), default=0)
+        width = max(len(label) for label, _ in report.timeline)
+        for label, amount in report.timeline:
+            value = console.bold(format_amount(amount)) if amount else console.dim("·")
+            console.print(
+                f"    {console.cyan(label.ljust(width))}  "
+                + self._bar(amount, max_amount, "green") + "  " + value
+            )
+
+    def _spending_top(self, report):
+        """Print a ranked bar chart of the biggest spends."""
+        if not report.top_spends:
+            return
+        console = self.console
+        console.print("\n  " + console.bold(console.cyan("Top spends")))
+        max_amount = max(amount for _, amount, _ in report.top_spends)
+        width = min(max(len(text) for text, _, _ in report.top_spends), 28)
+        for text, amount, count in report.top_spends:
+            name = text if len(text) <= width else text[: width - 1] + "…"
+            tally = console.dim(f"  ×{count}") if count > 1 else ""
+            console.print(
+                f"    {name.ljust(width)}  {self._bar(amount, max_amount, 'cyan')}  "
+                + console.bold(format_amount(amount).rjust(12)) + tally
             )

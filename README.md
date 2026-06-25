@@ -1,8 +1,8 @@
 # jasem
 
-A plain-text **task manager** and **time tracker** for your terminal, with
-pluggable AI parsing. One file, zero dependencies, your data in human-readable
-Markdown.
+A plain-text **task manager**, **time tracker**, and **spending log** for your
+terminal, with pluggable AI parsing. One file, zero dependencies, your data in
+human-readable Markdown.
 
 ## Install & run
 
@@ -36,8 +36,12 @@ and tags for you.
 - **Views & edits** — `jasem list`, `today`, `week`, `overdue`,
   `done 3`, `set 3 deadline tomorrow`, `rm 3`.
 - **Time tracking** — `jasem track "1h 30min, code review, work"`, then
-  `jasem track week` for per-day totals; fix or drop an entry with
+  `jasem report week` for per-day totals; fix or drop an entry with
   `jasem track set 3 time 2h` and `jasem track rm 3`.
+- **Spending log** — `jasem acc "50k lunch with the team, food"` records the
+  amount, date, and category; review with `jasem acc list` and
+  `jasem acc report month`; edit or drop with `jasem acc set 3 amount 60k` and
+  `jasem acc rm 3`.
 - **Plain-text storage** — everything lives in `~/.jasem/*.md`; read, grep,
   edit, sync, or version-control it however you like.
 - **Pluggable AI, local by default** — runs fully offline with
