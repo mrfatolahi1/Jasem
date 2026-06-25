@@ -10,6 +10,7 @@ import unittest
 from jasem.application.app import App
 from jasem.application.reports import build_report
 from jasem.domain.time_entry import TimeEntry
+from jasem.shared.calendar_view import CalendarView
 from jasem.shared.charts import BAR_WIDTH, bar
 from jasem.shared.config import Config
 from jasem.shared.console import Console
@@ -106,6 +107,18 @@ class BuildReportTests(unittest.TestCase):
         self.assertEqual(report.total_minutes, 0)
         self.assertEqual(report.entry_count, 0)
         self.assertIsNone(report.busiest_day)
+
+    def test_jalali_labels_keep_gregorian_maths(self):
+        """A Jalali calendar formats labels while the figures stay Gregorian."""
+        report = build_report(
+            _entries(), "2026-06-18", "2026-06-19", "2026-06-19",
+            "last 7 days", calendar=CalendarView(True)
+        )
+        self.assertEqual(report.start, "2026-06-18")
+        self.assertEqual(report.end, "2026-06-19")
+        self.assertEqual(report.busiest_day, ("2026-06-18", 120))
+        labels = [label for label, _ in report.timeline]
+        self.assertEqual(labels, ["Panj 03-28", "Jom 03-29"])
 
 
 class ReportCommandTests(unittest.TestCase):

@@ -1,5 +1,7 @@
 """Construction of the colorized ``jasem help`` text."""
 
+from ..shared.calendar_view import CalendarView
+
 
 def render_help(console, config):
     """Return the full help screen as a single string.
@@ -15,6 +17,8 @@ def render_help(console, config):
     command = console.green
     example = console.yellow
     note = console.dim
+    calendar = CalendarView.from_config(config)
+    date_example = calendar.format_iso("2026-07-01")
 
     def row(left, right):
         """Return an aligned ``key -> value`` help row."""
@@ -41,7 +45,7 @@ def render_help(console, config):
         row("jasem done <id>…", "mark task(s) complete"),
         row("jasem rm <id>…", "delete task(s) permanently"),
         row("jasem set <id> priority", example("high · medium · low")),
-        row("jasem set <id> deadline", example("next friday · in 3 days · 2026-07-01 · none")),
+        row("jasem set <id> deadline", example(f"next friday · in 3 days · {date_example} · none")),
         row("jasem set <id> category", example("work finance")
             + note("  (space/comma-separated; ") + example("none") + note(" clears)")),
 
@@ -72,8 +76,10 @@ def render_help(console, config):
         row("  model", example(config.model) + note("   (JASEM_MODEL)")),
         row("  tasks", config.task_file + note("  (plain Markdown, hand-editable)")),
         row("  time log", config.track_file + note("  (plain Markdown)")),
+        row("  calendar", example("Jalali" if config.jalali else "Gregorian")
+            + note("   (JASEM_JALALI; data on disk stays Gregorian)")),
         row("  env vars", note("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_PROVIDER · "
                                "JASEM_MODEL · JASEM_API_KEY · JASEM_OPENAI_API_BASE · "
-                               "JASEM_API_BASE · OLLAMA_HOST")),
+                               "JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI")),
     ]
     return "\n".join(sections)

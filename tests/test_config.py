@@ -34,6 +34,21 @@ class ConfigBaseUrlTests(unittest.TestCase):
         self.assertEqual(config.provider, "ollama")
         self.assertEqual(config.model, "qwen2.5:3b")
         self.assertEqual(config.openai_api_base, "")
+        self.assertFalse(config.jalali)
+
+
+class JalaliFlagTests(unittest.TestCase):
+    """The JASEM_JALALI flag is read as a boolean."""
+
+    def test_truthy_values_enable(self):
+        """The accepted truthy spellings all turn Jalali mode on."""
+        for value in ("1", "true", "TRUE", "yes", "on", " True "):
+            self.assertTrue(Config({"JASEM_JALALI": value}).jalali, value)
+
+    def test_other_values_disable(self):
+        """Anything else (including unset) leaves Jalali mode off."""
+        for value in ("0", "false", "no", "off", ""):
+            self.assertFalse(Config({"JASEM_JALALI": value}).jalali, value)
 
 
 if __name__ == "__main__":
