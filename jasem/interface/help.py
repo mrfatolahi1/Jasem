@@ -25,7 +25,7 @@ def render_help(console, config):
         return "  " + console.green(left.ljust(24)) + right
 
     sections = [
-        console.bold("jasem") + note(" — plain-text task manager + time tracker, pluggable AI parsing"),
+        console.bold("jasem") + note(" — plain-text task manager + time tracker + spending log, pluggable AI parsing"),
 
         header("ADD") + note("  wrap the task in quotes; deadline, priority & tags auto-detected"),
         "  " + command('jasem "') + example("pay rent next friday, high priority, finance") + command('"'),
@@ -63,6 +63,16 @@ def render_help(console, config):
         row("jasem report month", "last 30 days"),
         row("jasem report all", "everything, e.g. " + command("jasem report all work")),
 
+        header("SPENDING") + note("  record money spent naturally; amount, date & tag auto-detected"),
+        "  " + command('jasem acc "') + example("50k lunch with the team yesterday, food") + command('"'),
+        "  " + command('jasem acc "') + example("1.5m new phone") + command('"'),
+        "  " + note("commas optional; date blank = today, tag blank = general; recording prints the id"),
+        row("jasem acc list [tag]", "recorded spending, oldest first, optionally by category"),
+        row("jasem acc rm <id>…", "delete spending record(s)"),
+        row("jasem acc set <id>", example('amount 60k · text "…" · date yesterday · tag food')),
+        row("jasem acc report", "totals, by-tag, timeline & top spends (period + tag like report)"),
+        row("jasem acc tags", "list spending categories in use, with counts"),
+
         header("AI PARSING") + note("  add & track call a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", note("local, no key — run ") + command("ollama serve") + note(" + a small model")),
         row("  openai", note("any OpenAI-compatible API — set ") + example("JASEM_API_KEY")
@@ -76,10 +86,11 @@ def render_help(console, config):
         row("  model", example(config.model) + note("   (JASEM_MODEL)")),
         row("  tasks", config.task_file + note("  (plain Markdown, hand-editable)")),
         row("  time log", config.track_file + note("  (plain Markdown)")),
+        row("  spending", config.spend_file + note("  (plain Markdown)")),
         row("  calendar", example("Jalali" if config.jalali else "Gregorian")
             + note("   (JASEM_JALALI; data on disk stays Gregorian)")),
-        row("  env vars", note("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_PROVIDER · "
-                               "JASEM_MODEL · JASEM_API_KEY · JASEM_OPENAI_API_BASE · "
-                               "JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI")),
+        row("  env vars", note("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_SPEND_FILE · "
+                               "JASEM_PROVIDER · JASEM_MODEL · JASEM_API_KEY · "
+                               "JASEM_OPENAI_API_BASE · JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI")),
     ]
     return "\n".join(sections)
