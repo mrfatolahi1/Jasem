@@ -33,16 +33,13 @@ def block_color(row, column):
     return PALETTE[(row + column) % len(PALETTE)]
 
 
-def render_logo(console, version):
-    """Return the colored wordmark plus a version line as one printable string.
+DESCRIPTION = "Handy plain-text task, time & expense tracker, with AI parsing"
+REPO_URL = "https://github.com/mrfatolahi1/Jasem"
+WIKI_URL = "https://github.com/mrfatolahi1/Jasem/wiki"
 
-    Args:
-        console: Console used to color the characters.
-        version: The version string shown under the logo.
 
-    Returns:
-        The logo, a blank line, and a dim ``jasem <version>`` footer.
-    """
+def render_logo(console):
+    """Return the colored block wordmark, with a leading blank line."""
     lines = []
     for row, text in enumerate(LOGO_ROWS):
         painted = []
@@ -52,4 +49,29 @@ def render_logo(console, version):
             else:
                 painted.append(console.rgb(char, *block_color(row, column)))
         lines.append("".join(painted))
-    return "\n".join(["", *lines, "", console.dim(f" jasem {version}")])
+    return "\n".join(["", *lines])
+
+
+def render_version(console, version):
+    """Return the ``jasem --version`` screen: logo, name + version, project link."""
+    return "\n".join([
+        render_logo(console),
+        "",
+        console.bold(f" Jasem {version}"),
+        "",
+        console.accent(f" {REPO_URL}"),
+    ])
+
+
+def render_welcome(console, version):
+    """Return the no-args welcome screen: logo, what jasem is, and how to use it."""
+    return "\n".join([
+        render_logo(console),
+        "",
+        console.bold(f" Jasem {version}") + console.dim("  ·  " + DESCRIPTION),
+        "",
+        console.bold(" How to Use:"),
+        "",
+        console.green(" jasem --help"),
+        console.accent(f" {WIKI_URL}"),
+    ])
