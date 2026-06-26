@@ -16,8 +16,6 @@ class Presenter:
         self.console = console
         self.calendar = calendar or CalendarView(False)
 
-    # -- tasks ---------------------------------------------------------------
-
     def tasks(self, tasks, header, today):
         """Print ``tasks`` under ``header``, sorted, colored, and width-aware.
 
@@ -30,8 +28,10 @@ class Presenter:
         items = sorted(tasks, key=lambda item: item.sort_key())
         console.print(rule(console, header))
         if not items:
-            console.print(console.dim("   nothing here — add one: ")
-                          + console.green('jasem todo "…"'))
+            console.print(
+                console.dim("   nothing here — add one: ")
+                + console.green('jasem todo "…"')
+            )
             return
         for line in self.task_lines(items, today):
             console.print(line)
@@ -43,15 +43,18 @@ class Presenter:
         Shared by the list views and the dashboard so a subset of tasks can be
         shown with a footer summarising the full set.
         """
-        table = Table(self.console, [
-            Column(),                                          # status glyph
-            Column(align="right", style=self.console.accent),  # id
-            Column(),                                           # priority badge
-            Column(),                                           # due
-            Column(flex=True, min_width=12, max_width=46),     # title
-            Column(style=self.console.dim),                    # tags
-            Column(align="right", style=self.console.dim),     # age
-        ])
+        table = Table(
+            self.console,
+            [
+                Column(),
+                Column(align="right", style=self.console.accent),
+                Column(),
+                Column(),
+                Column(flex=True, min_width=12, max_width=46),
+                Column(style=self.console.dim),
+                Column(align="right", style=self.console.dim),
+            ],
+        )
         return table.render([self._task_row(task, today) for task in items])
 
     def _task_row(self, task, today):
@@ -69,7 +72,8 @@ class Presenter:
         """Return the styled priority badge cell for ``task``."""
         console = self.console
         label = {"high": "⚑ high", "medium": "  med", "low": "  low"}.get(
-            task.priority, "  " + task.priority)
+            task.priority, "  " + task.priority
+        )
         if task.done:
             return (label, console.dim)
         if task.priority == "high":
@@ -100,16 +104,15 @@ class Presenter:
         """Return the footer summary line for a task list."""
         open_tasks = [task for task in items if not task.done]
         due_today = sum(1 for task in open_tasks if task.deadline == today)
-        overdue = sum(1 for task in open_tasks
-                      if task.deadline and task.deadline < today)
+        overdue = sum(
+            1 for task in open_tasks if task.deadline and task.deadline < today
+        )
         parts = [f"{len(open_tasks)} open" if open_tasks else f"{len(items)} done"]
         if due_today:
             parts.append(f"{due_today} due today")
         if overdue:
             parts.append(f"{overdue} overdue")
         return "  ·  ".join(parts)
-
-    # -- time entries --------------------------------------------------------
 
     def time_entries(self, entries, header):
         """Print time-log ``entries`` under ``header``, oldest first.
@@ -122,29 +125,37 @@ class Presenter:
         items = sorted(entries, key=lambda item: (item.date, item.id))
         console.print(rule(console, header))
         if not items:
-            console.print(console.dim("   nothing here — log time: ")
-                          + console.green('jasem track "…"'))
+            console.print(
+                console.dim("   nothing here — log time: ")
+                + console.green('jasem track "…"')
+            )
             return
-        table = Table(console, [
-            Column(align="right", style=console.accent),       # id
-            Column(style=console.dim),                         # date
-            Column(align="right", style=console.bold),         # duration
-            Column(flex=True, min_width=12, max_width=48),     # work
-            Column(style=console.dim),                         # tag
-        ])
-        rows = [[
-            str(entry.id),
-            self.calendar.format_iso(entry.date) or "—",
-            entry.time_text,
-            entry.work,
-            "#" + entry.tag if entry.tag else "",
-        ] for entry in items]
+        table = Table(
+            console,
+            [
+                Column(align="right", style=console.accent),
+                Column(style=console.dim),
+                Column(align="right", style=console.bold),
+                Column(flex=True, min_width=12, max_width=48),
+                Column(style=console.dim),
+            ],
+        )
+        rows = [
+            [
+                str(entry.id),
+                self.calendar.format_iso(entry.date) or "—",
+                entry.time_text,
+                entry.work,
+                "#" + entry.tag if entry.tag else "",
+            ]
+            for entry in items
+        ]
         for line in table.render(rows):
             console.print(line)
         total = sum(entry.minutes() for entry in items)
-        console.print(rule(console, summary=f"{format_minutes(total)} · {len(items)} entries"))
-
-    # -- spending ------------------------------------------------------------
+        console.print(
+            rule(console, summary=f"{format_minutes(total)} · {len(items)} entries")
+        )
 
     def spending(self, records, header):
         """Print spending ``records`` under ``header``, oldest first.
@@ -157,32 +168,40 @@ class Presenter:
         items = sorted(records, key=lambda item: (item.date, item.id))
         console.print(rule(console, header))
         if not items:
-            console.print(console.dim("   nothing here — record one: ")
-                          + console.green('jasem acc "…"'))
+            console.print(
+                console.dim("   nothing here — record one: ")
+                + console.green('jasem acc "…"')
+            )
             return
-        table = Table(console, [
-            Column(align="right", style=console.accent),       # id
-            Column(style=console.dim),                         # date
-            Column(align="right", style=console.bold),         # amount
-            Column(flex=True, min_width=12, max_width=48),     # title
-            Column(style=console.dim),                         # tag
-        ])
-        rows = [[
-            str(record.id),
-            self.calendar.format_iso(record.date) or "—",
-            format_amount(record.amount()),
-            record.title,
-            "#" + record.tag if record.tag else "",
-        ] for record in items]
+        table = Table(
+            console,
+            [
+                Column(align="right", style=console.accent),
+                Column(style=console.dim),
+                Column(align="right", style=console.bold),
+                Column(flex=True, min_width=12, max_width=48),
+                Column(style=console.dim),
+            ],
+        )
+        rows = [
+            [
+                str(record.id),
+                self.calendar.format_iso(record.date) or "—",
+                format_amount(record.amount()),
+                record.title,
+                "#" + record.tag if record.tag else "",
+            ]
+            for record in items
+        ]
         lines = table.render(rows)
         for record, line in zip(items, lines):
             console.print(line)
             if record.description:
                 console.print(console.dim("       ↳ " + record.description))
         total = sum(record.amount() for record in items)
-        console.print(rule(console, summary=f"{format_amount(total)} · {len(items)} records"))
-
-    # -- shared report helpers ----------------------------------------------
+        console.print(
+            rule(console, summary=f"{format_amount(total)} · {len(items)} records")
+        )
 
     def _bar(self, value, max_value, style="cyan"):
         """Return a colored bar padded with spaces to a fixed width.
@@ -201,11 +220,11 @@ class Presenter:
         pct = round(delta / previous * 100)
         arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "■")
         good = (delta > 0) == higher_is_good
-        style = console.green if delta and good else (console.red if delta else console.dim)
+        style = (
+            console.green if delta and good else (console.red if delta else console.dim)
+        )
         sign = "+" if delta > 0 else ""
         return style(f"{arrow} {sign}{pct}%")
-
-    # -- time report ---------------------------------------------------------
 
     def report(self, report):
         """Print an aggregated time :class:`~jasem.application.reports.Report`."""
@@ -224,8 +243,14 @@ class Presenter:
         self._report_timeline(report)
         self._report_activities(report)
         console.print("")
-        console.print(rule(console, summary=(
-            f"total {format_minutes(report.total_minutes)} · {report.entry_count} entries")))
+        console.print(
+            rule(
+                console,
+                summary=(
+                    f"total {format_minutes(report.total_minutes)} · {report.entry_count} entries"
+                ),
+            )
+        )
 
     def _report_summary(self, report):
         """Print the headline numbers: total, entries, active days, averages."""
@@ -237,16 +262,29 @@ class Presenter:
         console.print("")
         console.print(stat("total", console.bold(format_minutes(report.total_minutes))))
         console.print(stat("entries", console.bold(str(report.entry_count))))
-        console.print(stat("active days", console.bold(
-            f"{report.active_days} of {report.span_days}")))
-        console.print(stat("avg active day", console.bold(
-            format_minutes(report.avg_per_active_day))))
+        console.print(
+            stat(
+                "active days",
+                console.bold(f"{report.active_days} of {report.span_days}"),
+            )
+        )
+        console.print(
+            stat(
+                "avg active day",
+                console.bold(format_minutes(report.avg_per_active_day)),
+            )
+        )
         if report.busiest_day:
             date, minutes = report.busiest_day
             shown = self.calendar.format_iso(date)
-            console.print(stat("busiest day", console.bold(
-                f"{shown}  ({format_minutes(minutes)})")))
-        trend = self._trend(report.total_minutes, getattr(report, "previous_total", 0), True)
+            console.print(
+                stat(
+                    "busiest day", console.bold(f"{shown}  ({format_minutes(minutes)})")
+                )
+            )
+        trend = self._trend(
+            report.total_minutes, getattr(report, "previous_total", 0), True
+        )
         if trend:
             console.print(stat("vs previous", trend))
         spark = sparkline([minutes for _, minutes in report.timeline])
@@ -262,7 +300,11 @@ class Presenter:
         max_minutes = max(minutes for _, minutes in report.by_tag)
         width = max(len(tag) for tag, _ in report.by_tag) + 1
         for tag, minutes in report.by_tag:
-            pct = round(minutes / report.total_minutes * 100) if report.total_minutes else 0
+            pct = (
+                round(minutes / report.total_minutes * 100)
+                if report.total_minutes
+                else 0
+            )
             label = console.accent(("#" + tag).ljust(width))
             console.print(
                 f"    {label}  {self._bar(minutes, max_minutes, 'cyan')}  "
@@ -275,15 +317,21 @@ class Presenter:
         if not report.timeline:
             return
         console = self.console
-        heading = "Weekly timeline" if report.timeline_unit == "week" else "Daily timeline"
+        heading = (
+            "Weekly timeline" if report.timeline_unit == "week" else "Daily timeline"
+        )
         console.print("\n  " + console.bold(console.accent(heading)))
         max_minutes = max((minutes for _, minutes in report.timeline), default=0)
         width = max(len(label) for label, _ in report.timeline)
         for label, minutes in report.timeline:
-            value = console.bold(format_minutes(minutes)) if minutes else console.dim("·")
+            value = (
+                console.bold(format_minutes(minutes)) if minutes else console.dim("·")
+            )
             console.print(
                 f"    {console.accent(label.ljust(width))}  "
-                + self._bar(minutes, max_minutes, "green") + "  " + value
+                + self._bar(minutes, max_minutes, "green")
+                + "  "
+                + value
             )
 
     def _report_activities(self, report):
@@ -299,10 +347,9 @@ class Presenter:
             tally = console.dim(f"  ×{count}") if count > 1 else ""
             console.print(
                 f"    {name.ljust(width)}  {self._bar(minutes, max_minutes, 'cyan')}  "
-                + console.bold(format_minutes(minutes).rjust(9)) + tally
+                + console.bold(format_minutes(minutes).rjust(9))
+                + tally
             )
-
-    # -- spending report -----------------------------------------------------
 
     def spending_report(self, report):
         """Print an aggregated spending
@@ -323,8 +370,14 @@ class Presenter:
         self._spending_timeline(report)
         self._spending_top(report)
         console.print("")
-        console.print(rule(console, summary=(
-            f"total {format_amount(report.total_amount)} · {report.record_count} records")))
+        console.print(
+            rule(
+                console,
+                summary=(
+                    f"total {format_amount(report.total_amount)} · {report.record_count} records"
+                ),
+            )
+        )
 
     def _spending_summary(self, report):
         """Print the headline numbers: total, records, active days, averages."""
@@ -336,16 +389,26 @@ class Presenter:
         console.print("")
         console.print(stat("total", console.bold(format_amount(report.total_amount))))
         console.print(stat("records", console.bold(str(report.record_count))))
-        console.print(stat("active days", console.bold(
-            f"{report.active_days} of {report.span_days}")))
-        console.print(stat("avg active day", console.bold(
-            format_amount(report.avg_per_active_day))))
+        console.print(
+            stat(
+                "active days",
+                console.bold(f"{report.active_days} of {report.span_days}"),
+            )
+        )
+        console.print(
+            stat(
+                "avg active day", console.bold(format_amount(report.avg_per_active_day))
+            )
+        )
         if report.biggest_day:
             date, amount = report.biggest_day
             shown = self.calendar.format_iso(date)
-            console.print(stat("biggest day", console.bold(
-                f"{shown}  ({format_amount(amount)})")))
-        trend = self._trend(report.total_amount, getattr(report, "previous_total", 0), False)
+            console.print(
+                stat("biggest day", console.bold(f"{shown}  ({format_amount(amount)})"))
+            )
+        trend = self._trend(
+            report.total_amount, getattr(report, "previous_total", 0), False
+        )
         if trend:
             console.print(stat("vs previous", trend))
         spark = sparkline([amount for _, amount in report.timeline])
@@ -361,7 +424,9 @@ class Presenter:
         max_amount = max(amount for _, amount in report.by_tag)
         width = max(len(tag) for tag, _ in report.by_tag) + 1
         for tag, amount in report.by_tag:
-            pct = round(amount / report.total_amount * 100) if report.total_amount else 0
+            pct = (
+                round(amount / report.total_amount * 100) if report.total_amount else 0
+            )
             label = console.accent(("#" + tag).ljust(width))
             console.print(
                 f"    {label}  {self._bar(amount, max_amount, 'cyan')}  "
@@ -374,7 +439,9 @@ class Presenter:
         if not report.timeline:
             return
         console = self.console
-        heading = "Weekly timeline" if report.timeline_unit == "week" else "Daily timeline"
+        heading = (
+            "Weekly timeline" if report.timeline_unit == "week" else "Daily timeline"
+        )
         console.print("\n  " + console.bold(console.accent(heading)))
         max_amount = max((amount for _, amount in report.timeline), default=0)
         width = max(len(label) for label, _ in report.timeline)
@@ -382,7 +449,9 @@ class Presenter:
             value = console.bold(format_amount(amount)) if amount else console.dim("·")
             console.print(
                 f"    {console.accent(label.ljust(width))}  "
-                + self._bar(amount, max_amount, "green") + "  " + value
+                + self._bar(amount, max_amount, "green")
+                + "  "
+                + value
             )
 
     def _spending_top(self, report):
@@ -398,5 +467,6 @@ class Presenter:
             tally = console.dim(f"  ×{count}") if count > 1 else ""
             console.print(
                 f"    {name.ljust(width)}  {self._bar(amount, max_amount, 'cyan')}  "
-                + console.bold(format_amount(amount).rjust(12)) + tally
+                + console.bold(format_amount(amount).rjust(12))
+                + tally
             )
