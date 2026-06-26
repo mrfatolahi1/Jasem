@@ -23,24 +23,32 @@ jasem track "1h30min code review, work"
 jasem acc   "50k lunch with the team, food"
 
 # Review
-jasem todo          # open tasks, soonest deadline first
-jasem               # welcome screen
-jasem --help        # full command reference
+jasem todo            # open tasks, soonest deadline first
+jasem track report    # time totals, by-tag & timeline
+jasem acc report      # spending totals, by-tag & timeline
+jasem                 # welcome screen
+jasem --help          # full command reference
 ```
 
 If no AI model is reachable, entries still save (dates parsed by regex).
 
 ## Commands
 
-Three symmetric namespaces, each sharing the same verbs — a quoted `"<text>"` adds; then `list`, `tags`, `rm`, `set`:
+Three symmetric namespaces, same verbs in each — prefix every command with `jasem`:
 
-| Namespace | Tracks | Example |
-|---|---|---|
-| `todo` | tasks | `jasem todo "submit report by friday, work"` |
-| `track` | time | `jasem track "1h30min debugging, work"` |
-| `acc` | spending | `jasem acc "50k lunch, food"` |
+| Action | `todo` — tasks | `track` — time | `acc` — spending |
+|---|---|---|---|
+| **Add** (natural language) | `todo "pay rent friday, finance"` | `track "1h30min review, work"` | `acc "50k lunch, food"` |
+| **List** | `todo list [tag]` | `track list [period] [tag]` | `acc list [period] [tag]` |
+| **Report** (totals · by-tag · timeline) | — | `track report [period] [tag]` | `acc report [period] [tag]` |
+| **Filtered views** | `todo today · week · overdue · all` | — | — |
+| **Search** | `todo find "rent"` | — | — |
+| **Categories** | `todo tags` | `track tags` | `acc tags` |
+| **Mark done** | `todo done <id>` | — | — |
+| **Edit a field** | `todo set <id> deadline tomorrow` | `track set <id> time 2h` | `acc set <id> amount 60k` |
+| **Remove** | `todo rm <id>` | `track rm <id>` | `acc rm <id>` |
 
-Views & reports — `list` · `today` · `week` · `overdue` · `find` · `report` `[period] [tag]` — render as aligned tables with bar charts and sparklines.
+`period` = `today` · `week` · `month` · `all`. Lists and reports render as aligned tables with bar charts and sparklines.
 
 ## AI backend
 
@@ -58,10 +66,21 @@ export JASEM_OPENAI_API_BASE=https://openrouter.ai/api/v1   # for non-OpenAI hos
 export JASEM_PROVIDER=anthropic JASEM_API_KEY=sk-ant-...
 ```
 
+## Persian (Jalali) calendar
+
+Set `JASEM_JALALI=true` to read and show every date in the Persian (Jalali/Shamsi) calendar:
+
+```sh
+export JASEM_JALALI=true
+jasem todo "pay rent 1405-04-10, finance"   # type dates in Jalali
+jasem todo list                              # dates shown in Jalali
+```
+
+Dates you **type** and dates jasem **shows** are Jalali, but files on disk stay Gregorian ISO (`YYYY-MM-DD`) — so the same data works with or without the flag. Relative phrases (`tomorrow`, `next friday`, `in 3 days`) work in both modes. Leave it unset (or `false`) for the default Gregorian calendar.
+
 ## Config
 
 - **Storage** — `~/.jasem/*.md`; grep, edit, sync, or version-control it freely.
-- **Calendar** — `JASEM_JALALI=true` shows & reads dates in the Persian (Jalali) calendar; files on disk stay Gregorian ISO.
 - **Color** — `JASEM_ACCENT` recolors the accent; `NO_COLOR` forces plain text.
 
 Run `jasem --help` for every command, option, and environment variable.
