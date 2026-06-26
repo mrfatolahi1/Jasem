@@ -8,6 +8,7 @@ from ..domain.task import PRIORITY_RANK, Task
 from ..domain.time_entry import TimeEntry
 from ..infrastructure.providers import get_provider
 from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore
+from ..interface.dashboard import Dashboard
 from ..interface.help import render_help
 from ..interface.presenter import Presenter
 from ..shared.amounts import format_amount, parse_amount
@@ -121,6 +122,20 @@ def resolve_window(dates_present, args, today, default):
     return start, today_iso, label, tag_filter
 
 
+def previous_window(start, end):
+    """Return the ISO bounds of the equal-length period just before ``start``..``end``.
+
+    Used to compute the period-over-period trend a report shows; for an ``all``
+    window the prior period is empty, so the trend simply does not appear.
+    """
+    start_date = dt.date.fromisoformat(start)
+    end_date = dt.date.fromisoformat(end)
+    span = (end_date - start_date).days + 1
+    prev_end = start_date - dt.timedelta(days=1)
+    prev_start = prev_end - dt.timedelta(days=span - 1)
+    return prev_start.isoformat(), prev_end.isoformat()
+
+
 class App:
     """Holds the wired collaborators and exposes one method per command."""
 
@@ -133,6 +148,7 @@ class App:
         """
         self.config = config
         self.console = console
+        console.accent_name = config.accent
         self.calendar = CalendarView.from_config(config)
         self.dates = DateResolver(self.calendar)
         self.presenter = Presenter(console, self.calendar)
@@ -149,7 +165,10 @@ class App:
         Args:
             argv: Arguments excluding the program name.
         """
-        if not argv or argv[0].lower() in ("help", "-h", "--help"):
+        if not argv:
+            self.dashboard()
+            return
+        if argv[0].lower() in ("help", "-h", "--help"):
             self.console.print(render_help(self.console, self.config))
             return
         command, rest = argv[0].lower(), argv[1:]
@@ -163,6 +182,12 @@ class App:
             self.acc(rest)
         else:
             self.unknown(argv[0])
+
+    def dashboard(self):
+        """Render the no-args home screen from the three logs (offline)."""
+        Dashboard(self.console, self.calendar, self.presenter).render(
+            self.tasks.load(), self.timelog.load(), self.spending.load(), dt.date.today()
+        )
 
     def version(self):
         """Print the running jasem version."""
@@ -599,7 +624,12 @@ class App:
         selected = [entry for entry in entries if start <= entry.date <= end]
         if tag_filter:
             selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
-        report = build_report(selected, start, end, end, label, tag_filter, self.calendar)
+        prev_start, prev_end = previous_window(start, end)
+        previous = [entry for entry in entries if prev_start <= entry.date <= prev_end
+                    and (not tag_filter or entry.tag.lower() == tag_filter)]
+        previous_total = sum(entry.minutes() for entry in previous if entry.minutes() > 0)
+        report = build_report(selected, start, end, end, label, tag_filter, self.calendar,
+                              previous_total=previous_total)
         self.presenter.report(report)
 
     def acc(self, args):
@@ -801,7 +831,12 @@ class App:
         selected = [record for record in records if start <= record.date <= end]
         if tag_filter:
             selected = [record for record in selected if record.tag.lower() == tag_filter]
-        report = build_spending_report(selected, start, end, end, label, tag_filter, self.calendar)
+        prev_start, prev_end = previous_window(start, end)
+        previous = [record for record in records if prev_start <= record.date <= prev_end
+                    and (not tag_filter or record.tag.lower() == tag_filter)]
+        previous_total = sum(record.amount() for record in previous if record.amount() > 0)
+        report = build_spending_report(selected, start, end, end, label, tag_filter,
+                                       self.calendar, previous_total=previous_total)
         self.presenter.spending_report(report)
 
     def _acc_tags(self):

@@ -21,17 +21,26 @@ $ jasem todo "pay rent next friday, high priority, finance"
 ✓ added #1: pay rent
   priority=high  deadline=2026-06-19  tags=finance
 
-$ jasem todo today
-Due today
-  ☐   2  [medium]  2026-06-15 (today)  call dentist  #health
+$ jasem todo
+ Open tasks ──────────────────────────────────────────────
+ ●  1  ⚑ high  in 4d  pay rent      #finance  today
+ ●  2    med   today  call dentist  #health   2d
+ ──────────────────────────── 2 open  ·  1 due today
 ```
 
 That's the whole loop: write naturally, jasem extracts the deadline, priority,
-and tags for you.
+and tags for you. Deadlines show as relative time (`in 4d`, `today`, `overdue`)
+and the last column is each task's age.
+
+Run **`jasem`** with no arguments for a one-screen **dashboard** — what needs
+attention today, plus the time you've tracked and spent — drawn straight from
+your logs, fully offline.
 
 Everything is organized into three symmetric namespaces — **`todo`** (tasks),
 **`track`** (time), and **`acc`** (spending) — and each shares the same verbs:
-a quoted `"<text>"` adds, then `list`, `tags`, `rm`, and `set`.
+a quoted `"<text>"` adds, then `list`, `tags`, `rm`, and `set`. Lists and
+reports render as aligned, width-aware tables with bar charts and sparklines;
+set `JASEM_ACCENT` to recolor the accent, or `NO_COLOR` for plain text.
 
 ## Features
 
