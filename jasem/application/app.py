@@ -10,6 +10,7 @@ from ..infrastructure.providers import get_provider
 from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore
 from ..interface.dashboard import Dashboard
 from ..interface.help import render_help
+from ..interface.logo import render_version, render_welcome
 from ..interface.presenter import Presenter
 from ..shared.amounts import format_amount, parse_amount
 from ..shared.calendar_view import CalendarView
@@ -166,7 +167,7 @@ class App:
             argv: Arguments excluding the program name.
         """
         if not argv:
-            self.dashboard()
+            self.welcome()
             return
         if argv[0].lower() in ("help", "-h", "--help"):
             self.console.print(render_help(self.console, self.config))
@@ -184,19 +185,27 @@ class App:
             self.unknown(argv[0])
 
     def dashboard(self):
-        """Render the no-args home screen from the three logs (offline)."""
+        """Render the home screen from the three logs (offline)."""
         Dashboard(self.console, self.calendar, self.presenter).render(
             self.tasks.load(), self.timelog.load(), self.spending.load(), dt.date.today()
         )
 
+    def welcome(self):
+        """Print the no-args welcome screen: logo, version, and how to get started."""
+        self.console.print(render_welcome(self.console, self._version()))
+
     def version(self):
-        """Print the running jasem version."""
+        """Print the logo, version, and project link."""
+        self.console.print(render_version(self.console, self._version()))
+
+    def _version(self):
+        """Return the installed package version, falling back to the source value."""
         try:
             from importlib.metadata import version as package_version
-            shown = package_version("jasem")
+            return package_version("jasem")
         except Exception:
             from .. import __version__ as shown
-        self.console.print(f"jasem {shown}")
+            return shown
 
     def unknown(self, word):
         """Explain an unrecognized top-level command, redirecting old verbs."""
