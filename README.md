@@ -17,11 +17,11 @@ pip install jasem
 Then write a task in plain language and see what's due:
 
 ```text
-$ jasem "pay rent next friday, high priority, finance"
+$ jasem todo "pay rent next friday, high priority, finance"
 ✓ added #1: pay rent
   priority=high  deadline=2026-06-19  tags=finance
 
-$ jasem today
+$ jasem todo today
 Due today
   ☐   2  [medium]  2026-06-15 (today)  call dentist  #health
 ```
@@ -29,15 +29,20 @@ Due today
 That's the whole loop: write naturally, jasem extracts the deadline, priority,
 and tags for you.
 
+Everything is organized into three symmetric namespaces — **`todo`** (tasks),
+**`track`** (time), and **`acc`** (spending) — and each shares the same verbs:
+a quoted `"<text>"` adds, then `list`, `tags`, `rm`, and `set`.
+
 ## Features
 
-- **Natural-language tasks** — `jasem "submit report by friday, work"` becomes
-  a title, deadline, priority, and tags.
-- **Views & edits** — `jasem list`, `today`, `week`, `overdue`,
-  `done 3`, `set 3 deadline tomorrow`, `rm 3`.
+- **Natural-language tasks** — `jasem todo "submit report by friday, work"`
+  becomes a title, deadline, priority, and tags.
+- **Views, search & edits** — `jasem todo list`, `today`, `week`, `overdue`,
+  `tags`, `find rent`, `done 3`, `set 3 deadline tomorrow`, `rm 3`.
 - **Time tracking** — `jasem track "1h 30min, code review, work"`, then
-  `jasem report week` for per-day totals; fix or drop an entry with
-  `jasem track set 3 time 2h` and `jasem track rm 3`.
+  `jasem track list` to see entries and `jasem track report week` for per-day
+  totals; fix or drop an entry with `jasem track set 3 time 2h` and
+  `jasem track rm 3`.
 - **Spending log** — `jasem acc "50k lunch with the team, food"` records the
   amount, date, and category; review with `jasem acc list` and
   `jasem acc report month`; edit or drop with `jasem acc set 3 amount 60k` and
@@ -70,8 +75,8 @@ Set `JASEM_JALALI=true` to work in the Persian (Jalali/Shamsi) calendar:
 
 ```sh
 export JASEM_JALALI=true
-jasem "pay rent 1405-04-10, finance"   # type deadlines in Jalali
-jasem list                              # dates are shown in Jalali
+jasem todo "pay rent 1405-04-10, finance"   # type deadlines in Jalali
+jasem todo list                              # dates are shown in Jalali
 ```
 
 Every date jasem **shows** is Jalali and every explicit date you **type** is read
@@ -83,7 +88,7 @@ default Gregorian calendar.
 ## More
 
 Run **`jasem help`** for the full command reference, every option, and all
-configuration variables.
+configuration variables, or **`jasem version`** to check what you have installed.
 
 ## License
 

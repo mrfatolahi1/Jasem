@@ -50,6 +50,30 @@ class Presenter:
         identifier = console.cyan(str(task.id).rjust(3))
         return f"{mark} {identifier}  [{priority}]  {deadline}  {title}  {tags}"
 
+    def time_entries(self, entries, header):
+        """Print time-log ``entries`` under ``header``, oldest first.
+
+        Args:
+            entries: The time entries to display.
+            header: Section title.
+        """
+        console = self.console
+        if not entries:
+            console.print(console.dim("  (nothing here)"))
+            return
+        console.print(console.bold(header))
+        for entry in sorted(entries, key=lambda item: (item.date, item.id)):
+            console.print("  " + self._time_entry_line(entry))
+
+    def _time_entry_line(self, entry):
+        """Return a single formatted, colored time-entry row."""
+        console = self.console
+        identifier = console.cyan(str(entry.id).rjust(3))
+        date = self.calendar.format_iso(entry.date) or "—"
+        duration = console.bold(entry.time_text.rjust(8))
+        tag = console.dim("#" + entry.tag) if entry.tag else ""
+        return f"{identifier}  {date}  {duration}  {entry.work}  {tag}"
+
     def report(self, report):
         """Print an aggregated time :class:`~jasem.application.reports.Report`.
 

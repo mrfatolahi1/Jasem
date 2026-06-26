@@ -122,7 +122,7 @@ class BuildReportTests(unittest.TestCase):
 
 
 class ReportCommandTests(unittest.TestCase):
-    """End-to-end ``jasem report`` rendering against a temporary log file."""
+    """End-to-end ``jasem track report`` rendering against a temporary log file."""
 
     def setUp(self):
         """Create a temp log and an app writing to an in-memory console."""
@@ -147,7 +147,7 @@ class ReportCommandTests(unittest.TestCase):
             TimeEntry(id=1, date=today.isoformat(), time_text="1h", work="api work", tag="work"),
             TimeEntry(id=2, date=yesterday.isoformat(), time_text="30min", work="emails", tag="admin"),
         ])
-        self.app.run(["report", "week"])
+        self.app.run(["track", "report", "week"])
         out = self._output()
         self.assertIn("Time report — last 7 days", out)
         self.assertIn("total", out)
@@ -163,14 +163,14 @@ class ReportCommandTests(unittest.TestCase):
             TimeEntry(id=1, date=today, time_text="1h", work="api", tag="work"),
             TimeEntry(id=2, date=today, time_text="2h", work="emails", tag="admin"),
         ])
-        self.app.run(["report", "week", "work"])
+        self.app.run(["track", "report", "week", "work"])
         out = self._output()
         self.assertIn("#work", out)
         self.assertNotIn("emails", out)
 
     def test_report_empty_log(self):
         """With nothing tracked the report says so instead of erroring."""
-        self.app.run(["report"])
+        self.app.run(["track", "report"])
         self.assertIn("nothing tracked", self._output())
 
 

@@ -47,6 +47,18 @@ SPEND_FIELD_ALIASES = {
 }
 """Accepted aliases for each editable field of ``jasem acc set``."""
 
+PERIODS = ("today", "week", "month", "all")
+"""Time windows accepted by the ``list`` and ``report`` subcommands."""
+
+LEGACY_HINTS = {
+    "list": "todo list", "ls": "todo list", "all": "todo all",
+    "today": "todo today", "week": "todo week", "overdue": "todo overdue",
+    "tags": "todo tags", "done": "todo done", "rm": "todo rm",
+    "set": "todo set", "edit": "todo set", "add": "todo add",
+    "find": "todo find", "search": "todo find", "report": "track report",
+}
+"""Pre-namespace command words mapped to where they live now."""
+
 
 def resolve_field(name):
     """Return the canonical field name for an alias, or ``None`` if unknown."""
@@ -73,6 +85,40 @@ def resolve_spend_field(name):
         if lowered in aliases:
             return field
     return None
+
+
+def resolve_window(dates_present, args, today, default):
+    """Split optional ``[period] [tag]`` arguments into a window and tag filter.
+
+    Shared by the ``list`` and ``report`` subcommands of every namespace.
+
+    Args:
+        dates_present: ISO dates present in the data set, used to anchor the
+            start of an ``all`` window.
+        args: The raw argument words following the subcommand.
+        today: Today's :class:`datetime.date`.
+        default: Period assumed when none is given (``"week"`` for reports,
+            ``"all"`` for plain lists).
+
+    Returns:
+        A ``(start, end, label, tag_filter)`` tuple — ISO date strings plus an
+        optional lowercase tag.
+    """
+    today_iso = today.isoformat()
+    words = list(args)
+    period = default
+    if words and words[0].lower() in PERIODS:
+        period = words.pop(0).lower()
+    tag_filter = words[0].lower() if words else None
+    if period == "all":
+        start, label = min(dates_present, default=today_iso), "all time"
+    elif period == "today":
+        start, label = today_iso, "today"
+    elif period == "month":
+        start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
+    else:
+        start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
+    return start, today_iso, label, tag_filter
 
 
 class App:
@@ -103,31 +149,85 @@ class App:
         Args:
             argv: Arguments excluding the program name.
         """
-        if not argv or argv[0] in ("help", "-h", "--help"):
+        if not argv or argv[0].lower() in ("help", "-h", "--help"):
             self.console.print(render_help(self.console, self.config))
             return
-        command, rest = argv[0], argv[1:]
-        if command == "tags":
-            self.show_tags()
-        elif command in VIEW_NAMES:
-            self.show_view(command, rest)
-        elif command in ("done", "rm"):
-            self.complete_or_remove(command, rest)
-        elif command in ("set", "edit"):
-            self.set_field(rest)
+        command, rest = argv[0].lower(), argv[1:]
+        if command in ("version", "--version", "-v"):
+            self.version()
+        elif command in ("todo", "task", "tasks"):
+            self.todo(rest)
         elif command == "track":
             self.track(rest)
         elif command == "acc":
             self.acc(rest)
-        elif command == "report":
-            self.report(rest)
-        elif command == "add":
-            if not rest:
-                self.console.print(self.console.red("usage: jasem add <description>"))
-                return
-            self.add(" ".join(rest))
         else:
-            self.add(" ".join(argv))
+            self.unknown(argv[0])
+
+    def version(self):
+        """Print the running jasem version."""
+        try:
+            from importlib.metadata import version as package_version
+            shown = package_version("jasem")
+        except Exception:
+            from .. import __version__ as shown
+        self.console.print(f"jasem {shown}")
+
+    def unknown(self, word):
+        """Explain an unrecognized top-level command, redirecting old verbs."""
+        console = self.console
+        hint = LEGACY_HINTS.get(word.lower())
+        if hint:
+            console.print(console.red(f"{word!r} is now ") + console.green(f"jasem {hint}"))
+        else:
+            console.print(console.red(f"unknown command: {word}"))
+        console.print(console.dim("  see ") + console.green("jasem help"))
+
+    def todo(self, args):
+        """Dispatch ``jasem todo`` to adding, viewing, editing, or searching tasks.
+
+        A bare ``jasem todo`` lists open tasks; a leading view or verb keyword
+        manages existing tasks; any other text is added as a new task (parsed by
+        AI, falling back to regex when no backend is reachable).
+        """
+        head = args[0].lower() if args else ""
+        if not args:
+            self.show_view("list", [])
+        elif head == "add":
+            text = " ".join(args[1:]).strip()
+            if not text:
+                self.console.print(self.console.red('usage: jasem todo add "<description>"'))
+                return
+            self.add(text)
+        elif head in VIEW_NAMES:
+            self.show_view(head, args[1:])
+        elif head == "tags":
+            self.show_tags()
+        elif head == "done":
+            self.complete_or_remove("done", args[1:])
+        elif head in ("rm", "remove", "del", "delete"):
+            self.complete_or_remove("rm", args[1:])
+        elif head in ("set", "edit"):
+            self.set_field(args[1:])
+        elif head in ("find", "search"):
+            self.find(args[1:])
+        else:
+            self.add(" ".join(args).strip())
+
+    def find(self, args):
+        """List tasks whose title or tags contain the given text (case-insensitive)."""
+        console = self.console
+        query = " ".join(args).strip()
+        if not query:
+            console.print(console.red('usage: jasem todo find "<text>"'))
+            return
+        needle = query.lower()
+        today = dt.date.today().isoformat()
+        matches = [
+            task for task in self.tasks.load()
+            if needle in task.title.lower() or needle in task.tags.lower()
+        ]
+        self.presenter.tasks(matches, f'Search · "{query}"', today)
 
     def add(self, text):
         """Parse ``text`` into a task, store it, and report the result."""
@@ -177,10 +277,10 @@ class App:
                 pass
         if not ids:
             console = self.console
-            console.print(console.red(f"usage: jasem {command} <id> [id...]"))
+            console.print(console.red(f"usage: jasem todo {command} <id> [id...]"))
             console.print(console.dim(
                 f'  (to add a task that starts with "{command}", quote it: '
-                f'jasem add "{command} ...")'
+                f'jasem todo add "{command} ...")'
             ))
             return
         if command == "done":
@@ -218,10 +318,10 @@ class App:
         """Update one field of a task identified by its id."""
         console = self.console
         if len(args) < 3:
-            console.print(console.red("usage: jasem set <id> <priority|deadline|category> <value>"))
-            console.print(console.dim("  e.g.  jasem set 3 priority high"))
-            console.print(console.dim("        jasem set 3 deadline next friday"))
-            console.print(console.dim("        jasem set 3 category work finance     (none clears it)"))
+            console.print(console.red("usage: jasem todo set <id> <priority|deadline|category> <value>"))
+            console.print(console.dim("  e.g.  jasem todo set 3 priority high"))
+            console.print(console.dim("        jasem todo set 3 deadline next friday"))
+            console.print(console.dim("        jasem todo set 3 category work finance     (none clears it)"))
             return
         try:
             identifier = int(args[0])
@@ -298,24 +398,35 @@ class App:
             console.print(f"  {count:>3}  " + console.cyan("#" + tag))
 
     def track(self, args):
-        """Dispatch ``jasem track`` to logging, editing, or removing entries.
+        """Dispatch ``jasem track`` across the time-tracking sub-verbs.
 
-        A bare ``rm``/``set`` first token manages existing entries; any other
-        text is logged as a new entry (parsed by AI). Reviewing tracked time
-        now lives in ``jasem report``.
+        A leading ``list``/``tags``/``report``/``rm``/``set`` keyword views or
+        manages existing entries; any other text is logged as a new entry
+        (parsed by AI, with a comma-format fallback when the backend is down).
         """
-        if args and args[0].lower() in ("rm", "remove", "del", "delete"):
+        head = args[0].lower() if args else ""
+        if head in ("rm", "remove", "del", "delete"):
             self._track_remove(args[1:])
             return
-        if args and args[0].lower() in ("set", "edit"):
+        if head in ("set", "edit"):
             self._track_set(args[1:])
+            return
+        if head in ("list", "ls"):
+            self._track_list(args[1:])
+            return
+        if head == "tags":
+            self._track_tags()
+            return
+        if head == "report":
+            self._track_report(args[1:])
             return
         text = " ".join(args).strip()
         if not text:
             console = self.console
             console.print(console.red('usage: jasem track "<what you did>"'))
             console.print(console.dim('  e.g.  jasem track "1h45min debugging the parser, work"'))
-            console.print(console.dim("  review tracked time with ") + console.green("jasem report"))
+            console.print(console.dim("  list entries with ") + console.green("jasem track list")
+                          + console.dim(" · review with ") + console.green("jasem track report"))
             return
         self._track_add(text)
 
@@ -441,36 +552,54 @@ class App:
         entry.work = value
         return f"work → {value}"
 
-    def report(self, args):
+    def _track_list(self, args):
+        """List logged time entries for a period, optionally filtered by tag.
+
+        Accepts an optional leading period (default ``all``) and trailing tag,
+        mirroring ``jasem acc list``.
+        """
+        entries = self.timelog.load()
+        start, end, label, tag_filter = resolve_window(
+            [entry.date for entry in entries], args, dt.date.today(), "all"
+        )
+        selected = [entry for entry in entries if start <= entry.date <= end]
+        if tag_filter:
+            selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
+        header = "Time entries"
+        if label != "all time":
+            header += "  ·  " + label
+        if tag_filter:
+            header += "  ·  #" + tag_filter
+        self.presenter.time_entries(selected, header)
+
+    def _track_tags(self):
+        """Print each category in use across time entries with its count."""
+        counts = {}
+        for entry in self.timelog.load():
+            tag = entry.tag or "work"
+            counts[tag] = counts.get(tag, 0) + 1
+        console = self.console
+        if not counts:
+            console.print(console.dim("  (no categories yet)"))
+            return
+        console.print(console.bold("Categories — time"))
+        for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            console.print(f"  {count:>3}  " + console.cyan("#" + tag))
+
+    def _track_report(self, args):
         """Render an aggregated time report for a period, optionally by tag.
 
         Accepts an optional leading period (``today``/``week``/``month``/``all``,
-        default ``week``) and an optional trailing tag filter, mirroring the
-        argument shape of ``jasem track``'s views.
+        default ``week``) and an optional trailing tag filter.
         """
         entries = self.timelog.load()
-        today = dt.date.today()
-        today_iso = today.isoformat()
-        words = list(args)
-        period = "week"
-        if words and words[0].lower() in ("today", "week", "month", "all"):
-            period = words.pop(0).lower()
-        tag_filter = words[0].lower() if words else None
-        if period == "all":
-            start = min((entry.date for entry in entries), default=today_iso)
-            label = "all time"
-        elif period == "today":
-            start, label = today_iso, "today"
-        elif period == "month":
-            start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
-        else:
-            start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
-        selected = [entry for entry in entries if start <= entry.date <= today_iso]
+        start, end, label, tag_filter = resolve_window(
+            [entry.date for entry in entries], args, dt.date.today(), "week"
+        )
+        selected = [entry for entry in entries if start <= entry.date <= end]
         if tag_filter:
             selected = [entry for entry in selected if entry.tag.lower() == tag_filter]
-        report = build_report(
-            selected, start, today_iso, today_iso, label, tag_filter, self.calendar
-        )
+        report = build_report(selected, start, end, end, label, tag_filter, self.calendar)
         self.presenter.report(report)
 
     def acc(self, args):
@@ -639,46 +768,40 @@ class App:
         record.title = value
         return f"title → {value}"
 
-    def _acc_list(self, filters):
-        """Render recorded spending, optionally filtered by a category."""
+    def _acc_list(self, args):
+        """Render recorded spending for a period, optionally filtered by tag.
+
+        Accepts an optional leading period (default ``all``) and trailing tag,
+        mirroring ``jasem track list``.
+        """
         records = self.spending.load()
+        start, end, label, tag_filter = resolve_window(
+            [record.date for record in records], args, dt.date.today(), "all"
+        )
+        selected = [record for record in records if start <= record.date <= end]
+        if tag_filter:
+            selected = [record for record in selected if record.tag.lower() == tag_filter]
         header = "Spending"
-        if filters:
-            tag = filters[0].strip().lower()
-            records = [record for record in records if record.tag.lower() == tag]
-            header += "  ·  #" + tag
-        self.presenter.spending(records, header)
+        if label != "all time":
+            header += "  ·  " + label
+        if tag_filter:
+            header += "  ·  #" + tag_filter
+        self.presenter.spending(selected, header)
 
     def _acc_report(self, args):
         """Render an aggregated spending report for a period, optionally by tag.
 
         Accepts an optional leading period (``today``/``week``/``month``/``all``,
-        default ``week``) and an optional trailing tag filter, mirroring
-        ``jasem report``'s argument shape.
+        default ``week``) and an optional trailing tag filter.
         """
         records = self.spending.load()
-        today = dt.date.today()
-        today_iso = today.isoformat()
-        words = list(args)
-        period = "week"
-        if words and words[0].lower() in ("today", "week", "month", "all"):
-            period = words.pop(0).lower()
-        tag_filter = words[0].lower() if words else None
-        if period == "all":
-            start = min((record.date for record in records), default=today_iso)
-            label = "all time"
-        elif period == "today":
-            start, label = today_iso, "today"
-        elif period == "month":
-            start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
-        else:
-            start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
-        selected = [record for record in records if start <= record.date <= today_iso]
+        start, end, label, tag_filter = resolve_window(
+            [record.date for record in records], args, dt.date.today(), "week"
+        )
+        selected = [record for record in records if start <= record.date <= end]
         if tag_filter:
             selected = [record for record in selected if record.tag.lower() == tag_filter]
-        report = build_spending_report(
-            selected, start, today_iso, today_iso, label, tag_filter, self.calendar
-        )
+        report = build_spending_report(selected, start, end, end, label, tag_filter, self.calendar)
         self.presenter.spending_report(report)
 
     def _acc_tags(self):
