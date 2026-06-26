@@ -66,6 +66,10 @@ export JASEM_PROVIDER=anthropic JASEM_API_KEY=sk-ant-...
 
 Run `jasem --help` for every command, option, and environment variable.
 
+## A note on AI
+
+**I used AI to create some parts of Jasem, but I carefully reviewed all the code written by AI rather than blindly copy-pasting.**
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
