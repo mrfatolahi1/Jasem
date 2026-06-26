@@ -73,3 +73,4 @@ class Config:
             "yes",
             "on",
         )
+        self.accent = env.get("JASEM_ACCENT", "").strip().lower() or "cyan"
