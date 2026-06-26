@@ -135,7 +135,7 @@ class MetaAndLegacyTests(CommandTestCase):
             self.console.stream.truncate(0)
             self.console.stream.seek(0)
             self.app.run(argv)
-            self.assertRegex(self._output(), r"jasem \d+\.\d+")
+            self.assertRegex(self._output(), r"Jasem \d+\.\d+")
 
     def test_legacy_report_redirects_without_adding_task(self):
         """A bare ``jasem report`` points at the new path and creates no task."""
