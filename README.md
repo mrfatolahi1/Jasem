@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="jasem" width="420">
+</p>
+
 # jasem
 
 A plain-text **task manager**, **time tracker**, and **spending log** for your
