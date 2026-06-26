@@ -33,7 +33,7 @@ def block_color(row, column):
     return PALETTE[(row + column) % len(PALETTE)]
 
 
-DESCRIPTION = "Handy plain-text task, time & expense tracker, with AI parsing"
+DESCRIPTION = "Handy plain-text task, time & expense tracker, with AI parsing."
 REPO_URL = "https://github.com/mrfatolahi1/Jasem"
 WIKI_URL = "https://github.com/mrfatolahi1/Jasem/wiki"
 
