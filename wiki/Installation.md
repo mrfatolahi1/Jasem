@@ -35,7 +35,7 @@ python3 -m venv ~/.venvs/jasem
 ## Verify the install
 
 ```sh
-jasem version        # e.g. "jasem 1.0.1"   (also: jasem --version, jasem -v)
+jasem version        # e.g. "Jasem 1.1.0"   (also: jasem --version, jasem -v)
 jasem help           # the full built-in command reference
 jasem                # the dashboard (empty until you add something)
 ```
