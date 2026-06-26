@@ -26,54 +26,57 @@ def render_help(console, config):
 
     sections = [
         console.bold("jasem") + note(" — plain-text task manager + time tracker + spending log, pluggable AI parsing"),
+        note("three namespaces — ") + command("todo") + note(" · ") + command("track") + note(" · ")
+        + command("acc") + note(" — each sharing the same verbs: ")
+        + note("<text>=add · list · tags · rm · set"),
 
-        header("ADD") + note("  wrap the task in quotes; deadline, priority & tags auto-detected"),
-        "  " + command('jasem "') + example("pay rent next friday, high priority, finance") + command('"'),
-        "  " + command('jasem "') + example("review Ali PR by tomorrow, work") + command('"'),
-        "  " + command('jasem add "') + example("…") + command('"') + note("   force-add even if text starts with a command word"),
-        "  " + note("quotes keep shell chars (& ! * ( )) and words like done/list literal"),
+        header("TASKS") + note("  ") + command("jasem todo …") + note("   deadline, priority & tags auto-detected"),
+        "  " + command('jasem todo "') + example("pay rent next friday, high priority, finance") + command('"'),
+        "  " + command('jasem todo "') + example("review Ali PR by tomorrow, work") + command('"'),
+        row("jasem todo  (no args)", "open tasks, soonest deadline first"),
+        row("jasem todo list (ls)", "same; append a category, e.g. " + command("jasem todo list work")),
+        row("jasem todo today", "due today"),
+        row("jasem todo week", "due within the next 7 days"),
+        row("jasem todo overdue", "past deadline, not done  " + console.red("(red)")),
+        row("jasem todo all", "everything, including completed"),
+        row("jasem todo tags", "list categories in use, with counts"),
+        row('jasem todo find "…"', "search task titles & tags"),
+        row("jasem todo done <id>…", "mark task(s) complete"),
+        row("jasem todo rm <id>…", "delete task(s) permanently"),
+        row("jasem todo set <id>", example("priority high · deadline next friday · category work finance")),
+        "  " + note("    priority ") + example("high·medium·low") + note(" · deadline ")
+        + example(f"next friday · {date_example} · none") + note(" · category ")
+        + example("none") + note(" clears"),
+        "  " + note("quotes keep shell chars (& ! * ( )) literal; ") + command('jasem todo add "…"')
+        + note(" force-adds text that starts with a command word"),
 
-        header("VIEW") + note("  append a category to filter, e.g. ") + command("jasem list work"),
-        row("jasem list  (ls)", "open tasks, soonest deadline first"),
-        row("jasem today", "due today"),
-        row("jasem week", "due within the next 7 days"),
-        row("jasem overdue", "past deadline, not done  " + console.red("(red)")),
-        row("jasem all", "everything, including completed"),
-        row("jasem tags", "list categories in use, with counts"),
-
-        header("UPDATE"),
-        row("jasem done <id>…", "mark task(s) complete"),
-        row("jasem rm <id>…", "delete task(s) permanently"),
-        row("jasem set <id> priority", example("high · medium · low")),
-        row("jasem set <id> deadline", example(f"next friday · in 3 days · {date_example} · none")),
-        row("jasem set <id> category", example("work finance")
-            + note("  (space/comma-separated; ") + example("none") + note(" clears)")),
-
-        header("TIME TRACKING") + note("  describe the work naturally; duration, date & tag auto-detected"),
+        header("TIME") + note("  ") + command("jasem track …") + note("   duration, date & tag auto-detected"),
         "  " + command('jasem track "') + example("1h45min debugging the parser yesterday, work") + command('"'),
         "  " + command('jasem track "') + example("spent half an hour on emails") + command('"'),
         "  " + note("commas optional; date blank = today, tag blank = work; logging prints the entry id"),
+        row("jasem track list", "logged entries  " + note("[period] [tag]")),
+        row("jasem track tags", "list categories in use, with counts"),
+        row("jasem track report", "totals, by-tag, timeline & top activities  " + note("[period] [tag]")),
         row("jasem track rm <id>…", "delete tracked entries"),
         row("jasem track set <id>", example("time 1h30min · work \"…\" · date yesterday · tag personal")),
-        "  " + note("review tracked time with ") + command("jasem report") + note("  (see REPORTS below)"),
 
-        header("REPORTS") + note("  stats + bar charts over tracked time; append a tag to filter"),
-        row("jasem report", "this week: totals, by-tag, daily timeline & top activities"),
-        row("jasem report week", "same as bare report (last 7 days)"),
-        row("jasem report month", "last 30 days"),
-        row("jasem report all", "everything, e.g. " + command("jasem report all work")),
-
-        header("SPENDING") + note("  record money spent naturally; amount, date & tag auto-detected"),
+        header("SPENDING") + note("  ") + command("jasem acc …") + note("   amount, date & tag auto-detected"),
         "  " + command('jasem acc "') + example("50k lunch with the team yesterday, food") + command('"'),
         "  " + command('jasem acc "') + example("1.5m new phone") + command('"'),
         "  " + note("commas optional; date blank = today, tag blank = general; recording prints the id"),
-        row("jasem acc list [tag]", "recorded spending, oldest first, optionally by category"),
+        row("jasem acc list", "recorded spending  " + note("[period] [tag]")),
+        row("jasem acc tags", "list categories in use, with counts"),
+        row("jasem acc report", "totals, by-tag, timeline & top spends  " + note("[period] [tag]")),
         row("jasem acc rm <id>…", "delete spending record(s)"),
         row("jasem acc set <id>", example('amount 60k · title "…" · description "…" · date yesterday · tag food')),
-        row("jasem acc report", "totals, by-tag, timeline & top spends (period + tag like report)"),
-        row("jasem acc tags", "list spending categories in use, with counts"),
+        "  " + note("period = ") + example("today · week · month · all")
+        + note("  (report defaults to week, list to all)"),
 
-        header("AI PARSING") + note("  add & track call a model; pick a backend with JASEM_PROVIDER"),
+        header("MORE"),
+        row("jasem help", "this screen"),
+        row("jasem version", "print the installed version  " + note("(--version, -v)")),
+
+        header("AI PARSING") + note("  add, track & acc call a model; pick a backend with JASEM_PROVIDER"),
         row("  ollama  (default)", note("local, no key — run ") + command("ollama serve") + note(" + a small model")),
         row("  openai", note("any OpenAI-compatible API — set ") + example("JASEM_API_KEY")
             + note(" (+ ") + example("JASEM_OPENAI_API_BASE") + note(" or ") + example("OPENAI_BASE_URL")
