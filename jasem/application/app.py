@@ -10,6 +10,7 @@ from ..infrastructure.providers import get_provider
 from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore
 from ..interface.dashboard import Dashboard
 from ..interface.help import render_help
+from ..interface.logo import render_logo
 from ..interface.presenter import Presenter
 from ..shared.amounts import format_amount, parse_amount
 from ..shared.calendar_view import CalendarView
@@ -196,7 +197,7 @@ class App:
             shown = package_version("jasem")
         except Exception:
             from .. import __version__ as shown
-        self.console.print(f"jasem {shown}")
+        self.console.print(render_logo(self.console, shown))
 
     def unknown(self, word):
         """Explain an unrecognized top-level command, redirecting old verbs."""
