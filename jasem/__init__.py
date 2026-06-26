@@ -7,4 +7,4 @@ and runs the commands, :mod:`jasem.interface` drives and renders the CLI, and
 :mod:`jasem.shared` holds primitives used across them.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.8.1"
