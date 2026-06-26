@@ -34,9 +34,11 @@ class Report:
     top_activities: list = field(default_factory=list)
     timeline: list = field(default_factory=list)
     timeline_unit: str = "day"
+    previous_total: int = 0
 
 
-def build_report(entries, start, end, today, label, tag_filter=None, calendar=None):
+def build_report(entries, start, end, today, label, tag_filter=None, calendar=None,
+                 previous_total=0):
     """Aggregate ``entries`` (already scoped to ``start``..``end``) into a Report.
 
     Only entries with a parseable, positive duration count toward the totals,
@@ -99,6 +101,7 @@ def build_report(entries, start, end, today, label, tag_filter=None, calendar=No
         avg_per_active_day=avg_per_active_day, busiest_day=busiest_day,
         by_tag=by_tag_sorted, top_activities=top_activities,
         timeline=timeline, timeline_unit=timeline_unit,
+        previous_total=previous_total,
     )
 
 
@@ -120,9 +123,11 @@ class SpendingReport:
     top_spends: list = field(default_factory=list)
     timeline: list = field(default_factory=list)
     timeline_unit: str = "day"
+    previous_total: float = 0.0
 
 
-def build_spending_report(records, start, end, today, label, tag_filter=None, calendar=None):
+def build_spending_report(records, start, end, today, label, tag_filter=None, calendar=None,
+                          previous_total=0.0):
     """Aggregate ``records`` (already scoped to ``start``..``end``) into a report.
 
     Only records with a parseable, positive amount count toward the totals,
@@ -185,6 +190,7 @@ def build_spending_report(records, start, end, today, label, tag_filter=None, ca
         avg_per_active_day=avg_per_active_day, biggest_day=biggest_day,
         by_tag=by_tag_sorted, top_spends=top_spends,
         timeline=timeline, timeline_unit=timeline_unit,
+        previous_total=previous_total,
     )
 
 
