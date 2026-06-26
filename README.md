@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/logo.svg" alt="jasem" width="420">
-</p>
+![jasem](docs/logo.svg)
 
 # jasem
 
