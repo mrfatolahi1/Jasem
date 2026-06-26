@@ -13,7 +13,7 @@ def render_help(console, config):
     Returns:
         The complete, ready-to-print help text.
     """
-    header = lambda text: "\n" + console.bold(console.cyan(text))
+    header = lambda text: "\n" + console.bold(console.accent(text))
     command = console.green
     example = console.yellow
     note = console.dim
@@ -92,8 +92,13 @@ def render_help(console, config):
         row("  spending", config.spend_file + note("  (plain Markdown)")),
         row("  calendar", example("Jalali" if config.jalali else "Gregorian")
             + note("   (JASEM_JALALI; data on disk stays Gregorian)")),
+        row("  accent", example(config.accent)
+            + note("   (JASEM_ACCENT: a color name or r,g,b)")),
+        row("  color", note("auto on a terminal; ") + example("NO_COLOR")
+            + note(" forces off, ") + example("FORCE_COLOR") + note(" forces on")),
         row("  env vars", note("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_SPEND_FILE · "
                                "JASEM_PROVIDER · JASEM_MODEL · JASEM_API_KEY · "
-                               "JASEM_OPENAI_API_BASE · JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI")),
+                               "JASEM_OPENAI_API_BASE · JASEM_API_BASE · OLLAMA_HOST · "
+                               "JASEM_JALALI · JASEM_ACCENT")),
     ]
     return "\n".join(sections)
