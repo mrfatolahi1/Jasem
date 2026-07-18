@@ -10,6 +10,14 @@ import datetime as dt
 
 from . import jalali
 
+GREGORIAN_YEAR_FLOOR = 1700
+"""Typed years at or above this are Gregorian even in Jalali mode.
+
+Everyday Jalali years sit around 1300–1500 while Gregorian ones sit around
+2000, so a year this large can only be Gregorian; converting it as Jalali
+would silently store a date ~621 years in the future.
+"""
+
 
 class CalendarView:
     """Formats stored Gregorian dates for display and parses user-typed dates."""
@@ -68,11 +76,14 @@ class CalendarView:
         """Resolve an explicit ``YYYY-MM-DD`` the user typed to a Gregorian ISO date.
 
         Gregorian mode validates the triple directly; Jalali mode interprets it as
-        a Jalali date and converts. Returns the Gregorian ISO string, or ``None``
-        when the date does not exist (so the caller can keep trying other forms).
+        a Jalali date and converts — unless the year is at or above
+        :data:`GREGORIAN_YEAR_FLOOR`, in which case it is unmistakably Gregorian
+        (e.g. a model-echoed ISO date) and passes through unconverted. Returns the
+        Gregorian ISO string, or ``None`` when the date does not exist (so the
+        caller can keep trying other forms).
         """
         try:
-            if self.enabled:
+            if self.enabled and year < GREGORIAN_YEAR_FLOOR:
                 return jalali.jalali_to_gregorian(year, month, day).isoformat()
             return dt.date(year, month, day).isoformat()
         except ValueError:

@@ -55,6 +55,10 @@ class JalaliModeTests(unittest.TestCase):
         self.assertEqual(self.view.parse_explicit(1405, 4, 4), "2026-06-25")
         self.assertIsNone(self.view.parse_explicit(1405, 13, 1))
 
+    def test_parse_explicit_gregorian_year_passes_through(self):
+        """A year that can only be Gregorian is never reinterpreted as Jalali."""
+        self.assertEqual(self.view.parse_explicit(2026, 6, 20), "2026-06-20")
+
 
 class FromConfigTests(unittest.TestCase):
     """The view reads its mode from the JASEM_JALALI config flag."""
