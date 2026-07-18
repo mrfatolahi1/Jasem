@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from jasem.application.app import App
+from jasem.domain.spending import Spending
 from jasem.domain.task import Task
 from jasem.domain.time_entry import TimeEntry
 from jasem.shared.config import Config
@@ -124,6 +125,24 @@ class TrackViewTests(CommandTestCase):
         out = self._output()
         self.assertIn("#work", out)
         self.assertIn("#admin", out)
+
+
+class AccViewTests(CommandTestCase):
+    """``jasem acc list`` renders the spending log."""
+
+    def test_acc_list_all_includes_future_dates(self):
+        """The ``all`` window spans every record, even ones dated ahead of today."""
+        self.app.spending.save([
+            Spending(id=1, date="2026-06-20", amount_text="100,000",
+                     title="lunch", tag="food"),
+            Spending(id=2, date="2647-09-11", amount_text="360,000",
+                     title="snack", tag="snacks"),
+        ])
+        self.app.run(["acc", "list"])
+        out = self._output()
+        self.assertIn("lunch", out)
+        self.assertIn("snack", out)
+        self.assertIn("2 records", out)
 
 
 class MetaAndLegacyTests(CommandTestCase):

@@ -96,7 +96,7 @@ def resolve_window(dates_present, args, today, default):
 
     Args:
         dates_present: ISO dates present in the data set, used to anchor the
-            start of an ``all`` window.
+            bounds of an ``all`` window.
         args: The raw argument words following the subcommand.
         today: Today's :class:`datetime.date`.
         default: Period assumed when none is given (``"week"`` for reports,
@@ -104,7 +104,8 @@ def resolve_window(dates_present, args, today, default):
 
     Returns:
         A ``(start, end, label, tag_filter)`` tuple — ISO date strings plus an
-        optional lowercase tag.
+        optional lowercase tag. Relative periods end today; ``all`` spans every
+        date present, so future-dated records are never silently hidden.
     """
     today_iso = today.isoformat()
     words = list(args)
@@ -112,15 +113,17 @@ def resolve_window(dates_present, args, today, default):
     if words and words[0].lower() in PERIODS:
         period = words.pop(0).lower()
     tag_filter = words[0].lower() if words else None
+    end = today_iso
     if period == "all":
         start, label = min(dates_present, default=today_iso), "all time"
+        end = max(max(dates_present, default=today_iso), today_iso)
     elif period == "today":
         start, label = today_iso, "today"
     elif period == "month":
         start, label = (today - dt.timedelta(days=29)).isoformat(), "last 30 days"
     else:
         start, label = (today - dt.timedelta(days=6)).isoformat(), "last 7 days"
-    return start, today_iso, label, tag_filter
+    return start, end, label, tag_filter
 
 
 def previous_window(start, end):
