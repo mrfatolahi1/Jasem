@@ -1,5 +1,6 @@
 """End-to-end routing tests for the todo/track/acc command namespaces."""
 
+import datetime as dt
 import io
 import os
 import shutil
@@ -10,6 +11,7 @@ from jasem.application.app import App
 from jasem.domain.spending import Spending
 from jasem.domain.task import Task
 from jasem.domain.time_entry import TimeEntry
+from jasem.infrastructure.storage import TaskStore, task_lists
 from jasem.shared.config import Config
 from jasem.shared.console import Console
 
@@ -21,11 +23,12 @@ class CommandTestCase(unittest.TestCase):
         """Create a throwaway data dir and an app writing to a string buffer."""
         self.tmpdir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmpdir)
-        self.config = Config({
+        self.env = {
             "JASEM_FILE": os.path.join(self.tmpdir, "tasks.md"),
             "JASEM_TRACK_FILE": os.path.join(self.tmpdir, "timelog.md"),
             "JASEM_SPEND_FILE": os.path.join(self.tmpdir, "spending.md"),
-        })
+        }
+        self.config = Config(self.env)
         self.console = Console(io.StringIO())
         self.app = App(self.config, self.console)
 
@@ -89,6 +92,172 @@ class TodoNamespaceTests(CommandTestCase):
         self.assertIn('Search · "RENT"', out)
         self.assertIn("pay rent", out)
         self.assertNotIn("archived note", out)
+
+
+class OfflineTaskParser:
+    """Stand-in task parser so list tests never reach for an AI backend."""
+
+    def parse(self, text, today=None):
+        """Return the text as a plain, undated task."""
+        return {
+            "done": False, "priority": "medium", "deadline": "",
+            "title": text, "tags": "", "created": dt.date.today().isoformat(),
+        }
+
+
+class TodoListTests(CommandTestCase):
+    """``jasem todo @name`` keeps each named list in its own file."""
+
+    def setUp(self):
+        """Wire the base app, then keep task parsing offline."""
+        super().setUp()
+        self.app.parser = OfflineTaskParser()
+
+    def _path(self, name):
+        """Return the file backing the list called ``name``."""
+        return task_lists.path_for(self.config.task_file, name)
+
+    def _load(self, name):
+        """Return the tasks stored in the list called ``name``."""
+        return TaskStore(self._path(name), name).load()
+
+    def _seed(self, name, *titles):
+        """Persist one open task per title in the list called ``name``."""
+        store = TaskStore(self._path(name), name)
+        store.save([Task(id=index, title=title)
+                    for index, title in enumerate(titles, start=1)])
+
+    def test_add_creates_a_separate_file(self):
+        """Adding to a named list writes a sibling file, not the default one."""
+        self.app.run(["todo", "@work", "add", "ship the release"])
+        self.assertTrue(os.path.exists(self._path("work")))
+        self.assertEqual([t.title for t in self._load("work")], ["ship the release"])
+        self.assertEqual(self._load(""), [])
+        self.assertIn("created list @work", self._output())
+
+    def test_views_are_scoped_to_the_selected_list(self):
+        """A list's view shows its own tasks and no others."""
+        self._seed("", "default task")
+        self._seed("work", "work task")
+        self.app.run(["todo", "@work"])
+        out = self._output()
+        self.assertIn("@work", out)
+        self.assertIn("work task", out)
+        self.assertNotIn("default task", out)
+
+    def test_default_view_excludes_named_lists(self):
+        """The default list is unaffected by tasks in named lists."""
+        self._seed("", "default task")
+        self._seed("work", "work task")
+        self.app.run(["todo"])
+        out = self._output()
+        self.assertIn("default task", out)
+        self.assertNotIn("work task", out)
+
+    def test_ids_restart_per_list(self):
+        """Each list numbers its tasks independently."""
+        self._seed("", "default task")
+        self.app.run(["todo", "@work", "add", "work task"])
+        self.assertEqual([t.id for t in self._load("work")], [1])
+
+    def test_done_and_rm_apply_to_the_selected_list(self):
+        """``done`` and ``rm`` act on the selected list only."""
+        self._seed("", "default task")
+        self._seed("work", "first", "second")
+        self.app.run(["todo", "@work", "done", "1"])
+        self.assertTrue(self._load("work")[0].done)
+        self.app.run(["todo", "@work", "rm", "2"])
+        self.assertEqual([t.id for t in self._load("work")], [1])
+        self.assertEqual([t.title for t in self._load("")], ["default task"])
+
+    def test_set_and_find_are_scoped(self):
+        """``set`` and ``find`` see only the selected list."""
+        self._seed("", "pay rent")
+        self._seed("work", "pay invoice")
+        self.app.run(["todo", "@work", "set", "1", "priority", "high"])
+        self.assertEqual(self._load("work")[0].priority, "high")
+        self.app.run(["todo", "@work", "find", "pay"])
+        out = self._output()
+        self.assertIn("pay invoice", out)
+        self.assertNotIn("pay rent", out)
+
+    def test_lists_shows_every_list_with_counts(self):
+        """``todo lists`` names each list and marks the active one."""
+        self._seed("", "default task")
+        self._seed("work", "first", "second")
+        self.app.run(["todo", "lists"])
+        out = self._output()
+        self.assertIn("default", out)
+        self.assertIn("@work", out)
+        self.assertIn("2 open", out)
+
+    def test_move_transfers_with_a_fresh_id(self):
+        """``move`` removes from the source and re-numbers in the destination."""
+        self._seed("work", "first", "second")
+        self._seed("home", "chore")
+        self.app.run(["todo", "@work", "move", "1", "home"])
+        self.assertEqual([t.title for t in self._load("work")], ["second"])
+        self.assertEqual([(t.id, t.title) for t in self._load("home")],
+                         [(1, "chore"), (2, "first")])
+
+    def test_move_rejects_the_current_list(self):
+        """``move`` into the list you are already in is refused."""
+        self._seed("work", "first")
+        self.app.run(["todo", "@work", "move", "1", "work"])
+        self.assertIn("already in @work", self._output())
+        self.assertEqual(len(self._load("work")), 1)
+
+    def test_unknown_list_warns_instead_of_showing_empty(self):
+        """A view on a list with no file reports the name rather than nothing."""
+        self._seed("work", "first")
+        self.app.run(["todo", "@wrok"])
+        out = self._output()
+        self.assertIn("no list named 'wrok'", out)
+        self.assertNotIn("Open tasks", out)
+
+    def test_env_var_sets_the_default_list(self):
+        """``JASEM_LIST`` selects a list without an ``@name`` on every command."""
+        self._seed("", "default task")
+        self._seed("work", "work task")
+        app = App(Config(dict(self.env, JASEM_LIST="work")), Console(io.StringIO()))
+        app.run(["todo"])
+        out = app.console.stream.getvalue()
+        self.assertIn("work task", out)
+        self.assertNotIn("default task", out)
+
+    def test_at_default_overrides_the_env_var(self):
+        """``@default`` returns to the unnamed list when ``JASEM_LIST`` is set."""
+        self._seed("", "default task")
+        self._seed("work", "work task")
+        app = App(Config(dict(self.env, JASEM_LIST="work")), Console(io.StringIO()))
+        app.run(["todo", "@default"])
+        out = app.console.stream.getvalue()
+        self.assertIn("default task", out)
+        self.assertNotIn("work task", out)
+
+    def test_invalid_list_name_is_refused(self):
+        """A name that could escape the data directory is rejected."""
+        self.app.run(["todo", "@../evil", "add", "oops"])
+        self.assertIn("invalid list name", self._output())
+        self.assertEqual(self._load(""), [])
+
+    def test_quoted_text_starting_with_at_is_a_task(self):
+        """A multi-word argument beginning with ``@`` is task text, not a list."""
+        self.app.run(["todo", "@ali review the PR"])
+        self.assertEqual(len(self._load("")), 1)
+        self.assertNotIn("invalid list name", self._output())
+
+    def test_existing_file_without_lists_still_loads(self):
+        """A tasks.md written before this feature keeps loading unchanged."""
+        with open(self.config.task_file, "w", encoding="utf-8") as handle:
+            handle.write(
+                "# Tasks\n\n"
+                "| ID | ✓ | Priority | Deadline | Task | Tags | Created |\n"
+                "| --- | --- | --- | --- | --- | --- | --- |\n"
+                "| 1 | ☐ | high | 2026-07-01 | pay rent | finance | 2026-06-15 |\n"
+            )
+        self.app.run(["todo"])
+        self.assertIn("pay rent", self._output())
 
 
 class TrackViewTests(CommandTestCase):
