@@ -1,5 +1,7 @@
 """Persistence of tasks in a Markdown table."""
 
+import os
+
 from ...domain.task import Task
 from .markdown_table import MarkdownTable, sanitize
 
@@ -7,18 +9,30 @@ _COLUMNS = ["ID", "✓", "Priority", "Deadline", "Task", "Tags", "Created"]
 """Ordered task table columns."""
 
 _PREAMBLE = (
-    "# Tasks\n\n"
+    "# Tasks{suffix}\n\n"
     "_Managed by the `jasem` CLI. You can hand-edit rows, but keep the column order._\n\n"
 )
-"""Markdown written above the task table."""
+"""Markdown written above the task table; ``suffix`` names the list."""
 
 
 class TaskStore:
     """Loads and saves :class:`~jasem.domain.task.Task` objects on disk."""
 
-    def __init__(self, path):
-        """Create a store backed by the Markdown file at ``path``."""
-        self._table = MarkdownTable(path, _COLUMNS, _PREAMBLE)
+    def __init__(self, path, name=""):
+        """Create a store backed by the Markdown file at ``path``.
+
+        Args:
+            path: Filesystem path of the list's Markdown file.
+            name: Name of the list, titling the file. Empty for the default list.
+        """
+        self.path = path
+        self.name = name
+        preamble = _PREAMBLE.format(suffix=f" — {name}" if name else "")
+        self._table = MarkdownTable(path, _COLUMNS, preamble)
+
+    def exists(self):
+        """Return whether the list's file has been written yet."""
+        return os.path.exists(self.path)
 
     def load(self):
         """Return all stored tasks in file order, skipping unparseable rows."""
