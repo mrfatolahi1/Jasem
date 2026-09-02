@@ -42,6 +42,7 @@ Three symmetric namespaces, same verbs in each — prefix every command with `ja
 | **List** | `todo list [tag]` | `track list [period] [tag]` | `acc list [period] [tag]` |
 | **Report** (totals · by-tag · timeline) | — | `track report [period] [tag]` | `acc report [period] [tag]` |
 | **Filtered views** | `todo today · week · overdue · all` | — | — |
+| **Named lists** | `todo @work …` · `todo lists` · `todo move <id> <list>` | — | — |
 | **Search** | `todo find "rent"` | — | — |
 | **Categories** | `todo tags` | `track tags` | `acc tags` |
 | **Mark done** | `todo done <id>` | — | — |
@@ -49,6 +50,23 @@ Three symmetric namespaces, same verbs in each — prefix every command with `ja
 | **Remove** | `todo rm <id>` | `track rm <id>` | `acc rm <id>` |
 
 `period` = `today` · `week` · `month` · `all`. Lists and reports render as aligned tables with bar charts and sparklines.
+
+## Task lists
+
+Keep work and home apart — prefix any `todo` command with `@<list>`:
+
+```sh
+jasem todo @work "ship the release friday, high priority"
+jasem todo @work            # only work's open tasks
+jasem todo @work overdue    # every view works the same way
+jasem todo lists            # all lists, with open counts
+jasem todo move 3 work      # move a task between lists
+
+export JASEM_LIST=work      # make work the default; @default gets you back
+```
+
+A list is created by its first task and stored in its own file
+(`~/.jasem/tasks-work.md`), numbering its tasks from 1.
 
 ## AI backend
 

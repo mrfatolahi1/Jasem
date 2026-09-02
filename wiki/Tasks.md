@@ -63,6 +63,7 @@ The columns are: bullet, id, priority, **relative deadline**, title, tags, and
 | `jasem todo week` | tasks due within the next 7 days |
 | `jasem todo overdue` | past deadline and not done — shown in **red** |
 | `jasem todo all` | everything, including completed tasks |
+| `jasem todo @work` | any of the above, in a named list — see [Multiple lists](#multiple-lists) |
 
 ### Filtering a view by category
 
@@ -154,9 +155,81 @@ jasem todo set 3 category clear     # task now has no tags
 
 (`priority` can't be cleared — every task is `high`, `medium`, or `low`.)
 
+## Multiple lists
+
+Tags group tasks by topic; **lists** keep them apart entirely. Prefix any `todo`
+command with `@<list>` and it runs against that list alone:
+
+```sh
+jasem todo @work "ship the release friday, high priority"
+jasem todo @work                 # only work's open tasks
+jasem todo @work overdue         # every view works the same way
+jasem todo @work done 3
+jasem todo @work set 3 priority high
+```
+
+The selector is always the **first** argument, and never contains a space — so
+`jasem todo "@ali review the PR"` still adds an ordinary task.
+
+A list comes into being with its first task, in its own file:
+
+```text
+$ jasem todo @work "ship the release friday"
+✓ created list @work
+✓ added #1: ship the release
+  priority=medium  deadline=2026-09-04
+```
+
+Each list numbers its tasks from 1, independently — `#3` in `@work` and `#3` in
+the default list are different tasks.
+
+### Seeing your lists
+
+```text
+$ jasem todo lists
+Task lists
+  •   2 open  default         3 total
+      5 open  @work           9 total
+      1 open  @personal       1 total
+  add to a list with jasem todo @work "…"
+```
+
+The `•` marks the list you're currently in. A name with no file yet is reported
+rather than shown empty, so a typo doesn't look like an empty list:
+
+```text
+$ jasem todo @wrok
+no list named 'wrok'
+  see jasem todo lists  ·  a list is created by its first task
+```
+
+### Moving tasks between lists
+
+```sh
+jasem todo move 3 work           # from the default list into work
+jasem todo @work move 1 2 home   # several at once
+```
+
+The task keeps everything but its id, which is renumbered for its new list.
+
+### Choosing a default list
+
+`JASEM_LIST` makes a list the one you get without typing `@`:
+
+```sh
+export JASEM_LIST=work
+jasem todo                       # work's open tasks
+jasem todo @personal             # still reachable per-command
+jasem todo @default              # the original unnamed list
+```
+
+`@default` (or `@-`) always means the unnamed list. List names may contain
+letters, digits, `-` and `_`.
+
 ## Where tasks are stored
 
-Tasks live in `~/.jasem/tasks.md` as a Markdown table you can hand-edit. See
+The default list lives in `~/.jasem/tasks.md` as a Markdown table you can
+hand-edit; each named list is a sibling file, `tasks-<name>.md`. See
 [[Data Files]] for the exact column layout.
 
 ## See also
