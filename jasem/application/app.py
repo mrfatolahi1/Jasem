@@ -7,7 +7,7 @@ from ..domain.spending import Spending
 from ..domain.task import PRIORITY_RANK, Task
 from ..domain.time_entry import TimeEntry
 from ..infrastructure.providers import get_provider
-from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore
+from ..infrastructure.storage import SpendingStore, TaskStore, TimeLogStore, task_lists
 from ..interface.dashboard import Dashboard
 from ..interface.help import render_help
 from ..interface.logo import render_version, render_welcome
@@ -156,7 +156,13 @@ class App:
         self.calendar = CalendarView.from_config(config)
         self.dates = DateResolver(self.calendar)
         self.presenter = Presenter(console, self.calendar)
-        self.tasks = TaskStore(config.task_file)
+        self.list_name = task_lists.normalize(config.list_name)
+        if self.list_name is None:
+            console.print(console.dim(
+                f"  (ignoring invalid JASEM_LIST: {config.list_name!r})"
+            ))
+            self.list_name = ""
+        self.tasks = self._store(self.list_name)
         self.timelog = TimeLogStore(config.track_file)
         self.spending = SpendingStore(config.spend_file)
         self.parser = TaskParser(get_provider, config, self.dates, console)
@@ -227,6 +233,9 @@ class App:
         manages existing tasks; any other text is added as a new task (parsed by
         AI, falling back to regex when no backend is reachable).
         """
+        args = self.select_list(args)
+        if args is None:
+            return
         head = args[0].lower() if args else ""
         if not args:
             self.show_view("list", [])
@@ -248,8 +257,117 @@ class App:
             self.set_field(args[1:])
         elif head in ("find", "search"):
             self.find(args[1:])
+        elif head == "lists":
+            self.show_lists()
+        elif head in ("move", "mv"):
+            self.move(args[1:])
         else:
             self.add(" ".join(args).strip())
+
+    def select_list(self, args):
+        """Point the task store at the list named by a leading ``@name``.
+
+        The selector is only ever the first argument and never contains a
+        space, so it cannot be confused with task text, a category filter, or a
+        field value.
+
+        Args:
+            args: The ``jasem todo`` arguments.
+
+        Returns:
+            The arguments with the selector removed, or ``None`` when the name
+            was rejected (an explanation has already been printed).
+        """
+        if not args or not args[0].startswith("@") or args[0].split() != [args[0]]:
+            return args
+        rest = list(args[1:])
+        name = task_lists.normalize(args[0])
+        if name is None:
+            console = self.console
+            console.print(console.red(f"invalid list name: {args[0]}"))
+            console.print(console.dim("  use letters, digits, - and _  ·  see ")
+                          + console.green("jasem todo lists"))
+            return None
+        self.list_name = name
+        self.tasks = self._store(name)
+        return rest
+
+    def _store(self, name):
+        """Return a task store for the list called ``name``."""
+        return TaskStore(task_lists.path_for(self.config.task_file, name), name)
+
+    def _missing_list(self):
+        """Report that the selected list does not exist yet, if so.
+
+        Returns:
+            ``True`` when the list has no file, meaning the caller should stop
+            rather than render an empty view for what is probably a typo.
+        """
+        if not self.list_name or self.tasks.exists():
+            return False
+        console = self.console
+        console.print(console.red(f"no list named {self.list_name!r}"))
+        console.print(console.dim("  see ") + console.green("jasem todo lists")
+                      + console.dim("  ·  a list is created by its first task"))
+        return True
+
+    def show_lists(self):
+        """Print every task list with its open and total counts."""
+        console = self.console
+        console.print(console.bold("Task lists"))
+        for name in [""] + task_lists.discover(self.config.task_file):
+            tasks = self._store(name).load()
+            open_count = sum(1 for task in tasks if not task.done)
+            marker = "•" if name == self.list_name else " "
+            label = task_lists.label(name)
+            console.print(
+                f"  {marker} {open_count:>3} open  "
+                + console.cyan(label.ljust(16))
+                + console.dim(f"{len(tasks)} total")
+            )
+        console.print(console.dim("  add to a list with ")
+                      + console.green('jasem todo @work "…"'))
+
+    def move(self, args):
+        """Move tasks to another list, giving each a fresh id there."""
+        console = self.console
+        if len(args) < 2:
+            console.print(console.red("usage: jasem todo move <id> [id...] <list>"))
+            console.print(console.dim("  e.g.  jasem todo move 3 work"))
+            return
+        target = task_lists.normalize(args[-1])
+        if target is None:
+            console.print(console.red(f"invalid list name: {args[-1]}"))
+            return
+        if target == self.list_name:
+            console.print(console.red(f"already in {task_lists.label(target)}"))
+            return
+        if self._missing_list():
+            return
+        ids = set()
+        for argument in args[:-1]:
+            try:
+                ids.add(int(argument))
+            except ValueError:
+                pass
+        if not ids:
+            console.print(console.red("usage: jasem todo move <id> [id...] <list>"))
+            return
+        tasks = self.tasks.load()
+        moved = [task for task in tasks if task.id in ids]
+        if not moved:
+            console.print(console.red("no matching id(s)"))
+            return
+        kept = [task for task in tasks if task.id not in ids]
+        destination = self._store(target)
+        existing = destination.load()
+        for task in moved:
+            task.id = TaskStore.next_id(existing)
+            existing.append(task)
+        destination.save(existing)
+        self.tasks.save(kept)
+        summary = ", ".join(f"#{task.id} {task.title}" for task in moved)
+        console.print(console.green(f"✓ moved to {task_lists.label(target)}:") + " " + summary)
 
     def find(self, args):
         """List tasks whose title or tags contain the given text (case-insensitive)."""
@@ -258,22 +376,30 @@ class App:
         if not query:
             console.print(console.red('usage: jasem todo find "<text>"'))
             return
+        if self._missing_list():
+            return
         needle = query.lower()
         today = dt.date.today().isoformat()
         matches = [
             task for task in self.tasks.load()
             if needle in task.title.lower() or needle in task.tags.lower()
         ]
-        self.presenter.tasks(matches, f'Search · "{query}"', today)
+        header = f'Search · "{query}"'
+        if self.list_name:
+            header += "  ·  " + task_lists.label(self.list_name)
+        self.presenter.tasks(matches, header, today)
 
     def add(self, text):
         """Parse ``text`` into a task, store it, and report the result."""
+        fresh = bool(self.list_name) and not self.tasks.exists()
         tasks = self.tasks.load()
         task = Task(**self.parser.parse(text))
         task.id = self.tasks.next_id(tasks)
         tasks.append(task)
         self.tasks.save(tasks)
         console = self.console
+        if fresh:
+            console.print(console.green("✓ created list ") + task_lists.label(self.list_name))
         console.print(" ".join([console.green("✓ added"), f"#{task.id}:", console.bold(task.title)]))
         shown_deadline = self.calendar.format_iso(task.deadline) or "no deadline"
         detail = f"  priority={task.priority}  deadline={shown_deadline}"
@@ -283,6 +409,8 @@ class App:
 
     def show_view(self, name, filters):
         """Render the named task view, optionally filtered by categories."""
+        if self._missing_list():
+            return
         today = dt.date.today().isoformat()
         week = (dt.date.today() + dt.timedelta(days=7)).isoformat()
         views = {
@@ -296,6 +424,8 @@ class App:
                         and task.deadline < today, "Overdue"),
         }
         predicate, header = views[name]
+        if self.list_name:
+            header += "  ·  " + task_lists.label(self.list_name)
         tasks = [task for task in self.tasks.load() if predicate(task)]
         if filters:
             categories = [item.strip().lower() for item in filters]
@@ -306,6 +436,8 @@ class App:
 
     def complete_or_remove(self, command, rest):
         """Handle ``done``/``rm`` after parsing their integer id arguments."""
+        if self._missing_list():
+            return
         ids = set()
         for argument in rest:
             try:
@@ -354,6 +486,8 @@ class App:
     def set_field(self, args):
         """Update one field of a task identified by its id."""
         console = self.console
+        if self._missing_list():
+            return
         if len(args) < 3:
             console.print(console.red("usage: jasem todo set <id> <priority|deadline|category> <value>"))
             console.print(console.dim("  e.g.  jasem todo set 3 priority high"))
@@ -420,6 +554,8 @@ class App:
 
     def show_tags(self):
         """Print each category in use on open tasks with its count."""
+        if self._missing_list():
+            return
         counts = {}
         for task in self.tasks.load():
             if task.done:

@@ -61,6 +61,7 @@ class Config:
         self.task_file = os.path.expanduser(
             env.get("JASEM_FILE", os.path.join(self.directory, "tasks.md"))
         )
+        self.list_name = env.get("JASEM_LIST", "").strip().lower()
         self.track_file = os.path.expanduser(
             env.get("JASEM_TRACK_FILE", os.path.join(self.directory, "timelog.md"))
         )

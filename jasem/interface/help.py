@@ -1,5 +1,6 @@
 """Construction of the colorized ``jasem help`` text."""
 
+from ..infrastructure.storage import task_lists
 from ..shared.calendar_view import CalendarView
 
 WIKI_URL = "https://github.com/mrfatolahi1/Jasem/wiki"
@@ -23,6 +24,8 @@ def render_help(console, config):
     command, example, note = console.green, console.yellow, console.dim
     calendar = CalendarView.from_config(config)
     date_example = calendar.format_iso("2026-07-01")
+    active_list = task_lists.normalize(config.list_name) or ""
+    active_task_file = task_lists.path_for(config.task_file, active_list)
 
     def header(text):
         """Return a blank-line-separated bold accent section title."""
@@ -56,6 +59,8 @@ def render_help(console, config):
         note("Three namespaces, same verbs in each — ") + command("todo") + note(" (tasks) · ")
         + command("track") + note(" (time) · ") + command("acc") + note(" (spending)"),
         note("  verbs:  <text> = add · list · tags · rm · set"),
+        note("  tasks also split into named lists — ") + command("jasem todo @work") + note(" · ")
+        + command("jasem todo lists"),
 
         header("TASKS"),
         row('jasem todo "<text>"', note("deadline, priority & tags auto-detected")),
@@ -75,8 +80,21 @@ def render_help(console, config):
         row("jasem todo set <id>", example("priority high · deadline next friday · category work finance")),
         cont(note("priority ") + example("high·medium·low") + note(" · deadline ")
              + example(f"next friday · {date_example} · none") + note(" · category ") + example("none") + note(" clears")),
+
         tip(note("quotes keep shell chars (& ! * ( )) literal; ") + command('jasem todo add "…"')
             + note(" force-adds a command-word start")),
+
+        header("TASK LISTS"),
+        row("jasem todo @<list> …", note("run any todo command against a named list")),
+        *example_lines("jasem todo @work", "ship the release friday, high priority"),
+        "    " + note("also  ") + command("jasem todo @work") + note(" · ")
+        + command("jasem todo @work overdue") + note(" · ") + command("jasem todo @work done 3"),
+        row("jasem todo lists", "every list, with open counts"),
+        row("jasem todo move <id>…", "move task(s) to another list, e.g. "
+            + command("move 3 work")),
+        row("jasem todo @default", note("back to the unnamed list")),
+        tip(note("a list is created by its first task, in its own file; ")
+            + example("JASEM_LIST") + note(" sets your default")),
 
         header("TIME"),
         row('jasem track "<text>"', note("duration, date & tag auto-detected")),
@@ -120,7 +138,9 @@ def render_help(console, config):
         header("FILES & CONFIG"),
         row("provider", example(config.provider) + note("   (JASEM_PROVIDER: ollama · openai · anthropic)")),
         row("model", example(config.model) + note("   (JASEM_MODEL)")),
-        row("tasks", config.task_file + note("  (plain Markdown, hand-editable)")),
+        row("tasks", active_task_file + note("  (plain Markdown, hand-editable)")),
+        row("list", example(task_lists.label(active_list))
+            + note("   (JASEM_LIST; ") + command("jasem todo lists") + note(" shows them all)")),
         row("time log", config.track_file + note("  (plain Markdown)")),
         row("spending", config.spend_file + note("  (plain Markdown)")),
         row("calendar", example("Jalali" if config.jalali else "Gregorian")
@@ -130,6 +150,6 @@ def render_help(console, config):
             + note(" forces off, ") + example("FORCE_COLOR") + note(" forces on")),
         row("env vars", note("JASEM_DIR · JASEM_FILE · JASEM_TRACK_FILE · JASEM_SPEND_FILE ·")),
         cont(note("JASEM_PROVIDER · JASEM_MODEL · JASEM_API_KEY · JASEM_OPENAI_API_BASE ·")),
-        cont(note("JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI · JASEM_ACCENT")),
+        cont(note("JASEM_API_BASE · OLLAMA_HOST · JASEM_JALALI · JASEM_ACCENT · JASEM_LIST")),
     ]
     return "\n".join(sections)

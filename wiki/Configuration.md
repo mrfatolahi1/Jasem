@@ -10,7 +10,8 @@ active provider, model, and file paths at the bottom.
 | Variable | Default | Controls |
 |----------|---------|----------|
 | `JASEM_DIR` | `~/.jasem` | the data directory |
-| `JASEM_FILE` | `<JASEM_DIR>/tasks.md` | the tasks file |
+| `JASEM_FILE` | `<JASEM_DIR>/tasks.md` | the tasks file (default list) |
+| `JASEM_LIST` | — | the task list used when no `@name` is given |
 | `JASEM_TRACK_FILE` | `<JASEM_DIR>/timelog.md` | the time-log file |
 | `JASEM_SPEND_FILE` | `<JASEM_DIR>/spending.md` | the spending file |
 
@@ -20,7 +21,12 @@ repo, etc.) to back up or share your data — see [[Data Files]].
 ```sh
 export JASEM_DIR=~/Dropbox/jasem            # move everything at once
 export JASEM_FILE=~/work/tasks.md           # or relocate one file
+export JASEM_LIST=work                      # default to the "work" list
 ```
+
+Named lists are stored beside `JASEM_FILE` as `tasks-<name>.md`, so relocating
+the tasks file moves every list with it. See [[Tasks]] for the `@<list>`
+selector.
 
 ## AI provider
 

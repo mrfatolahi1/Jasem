@@ -45,6 +45,24 @@ jasem todo set 3 deadline none           # clear it
 jasem todo set 3 category work finance   # replace tags
 ```
 
+### Named lists
+
+```text
+jasem todo @<list> …           run any todo command above against a named list
+jasem todo lists               every list, with open counts
+jasem todo move <id>… <list>   move task(s) to another list      (alias: mv)
+jasem todo @default            the unnamed list                  (alias: @-)
+```
+
+The `@<list>` selector is always the **first** argument. `JASEM_LIST` sets the
+list used when it is omitted. See [[Tasks]].
+
+```text
+jasem todo @work "ship the release friday, high priority"
+jasem todo @work overdue
+jasem todo @work move 1 2 personal
+```
+
 ## Time — `jasem track`
 
 ```text

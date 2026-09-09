@@ -6,7 +6,8 @@ grep, edit, diff, sync, and version-control your data with ordinary tools.
 
 | File | Holds | Managed by |
 |------|-------|------------|
-| `~/.jasem/tasks.md` | tasks | `jasem todo` |
+| `~/.jasem/tasks.md` | tasks (default list) | `jasem todo` |
+| `~/.jasem/tasks-<name>.md` | tasks in a named list | `jasem todo @<name>` |
 | `~/.jasem/timelog.md` | time entries | `jasem track` |
 | `~/.jasem/spending.md` | spending records | `jasem acc` |
 
@@ -31,6 +32,15 @@ _Managed by the `jasem` CLI. You can hand-edit rows, but keep the column order._
 * **Priority** is `high` / `medium` / `low`.
 * **Deadline**, **Tags** use `-` when empty.
 * **Dates** are always Gregorian `YYYY-MM-DD`, even in [[Jalali Calendar]] mode.
+
+Named lists use this exact format in `tasks-<name>.md`, titled `# Tasks — work`.
+Ids are counted **per file**, so each list numbers its tasks from 1. Renaming or
+deleting a list is just `mv` or `rm` on its file:
+
+```sh
+mv ~/.jasem/tasks-work.md ~/.jasem/tasks-job.md   # rename the list
+rm ~/.jasem/tasks-work.md                         # delete it
+```
 
 ### `timelog.md`
 
