@@ -29,7 +29,7 @@ jasem todo all [cat…]          everything, including completed
 jasem todo tags                categories in use (open tasks), with counts
 jasem todo find "<text>"       search titles & tags          (alias: search)
 
-jasem todo done <id>…          mark task(s) complete
+jasem todo done <id>…          mark task(s) complete   (also: done @<list> <id>…)
 jasem todo rm <id>…            delete task(s)        (aliases: remove, del, delete)
 jasem todo set <id> <field> <value>                 edit one field   (alias: edit)
 ```

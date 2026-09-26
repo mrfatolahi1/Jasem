@@ -140,6 +140,11 @@ def previous_window(start, end):
     return prev_start.isoformat(), prev_end.isoformat()
 
 
+def _summary(tasks):
+    """Return ``tasks`` as a comma-separated ``#id title`` list."""
+    return ", ".join(f"#{task.id} {task.title}" for task in tasks)
+
+
 class App:
     """Holds the wired collaborators and exposes one method per command."""
 
@@ -280,17 +285,30 @@ class App:
         """
         if not args or not args[0].startswith("@") or args[0].split() != [args[0]]:
             return args
-        rest = list(args[1:])
-        name = task_lists.normalize(args[0])
+        if not self._switch_list(args[0]):
+            return None
+        return list(args[1:])
+
+    def _switch_list(self, selector):
+        """Point the task store at the list named by ``selector``.
+
+        Args:
+            selector: Raw ``@name`` text.
+
+        Returns:
+            ``True`` on success, ``False`` when the name was rejected (an
+            explanation has already been printed).
+        """
+        name = task_lists.normalize(selector)
         if name is None:
             console = self.console
-            console.print(console.red(f"invalid list name: {args[0]}"))
+            console.print(console.red(f"invalid list name: {selector}"))
             console.print(console.dim("  use letters, digits, - and _  ·  see ")
                           + console.green("jasem todo lists"))
-            return None
+            return False
         self.list_name = name
         self.tasks = self._store(name)
-        return rest
+        return True
 
     def _store(self, name):
         """Return a task store for the list called ``name``."""
@@ -366,8 +384,7 @@ class App:
             existing.append(task)
         destination.save(existing)
         self.tasks.save(kept)
-        summary = ", ".join(f"#{task.id} {task.title}" for task in moved)
-        console.print(console.green(f"✓ moved to {task_lists.label(target)}:") + " " + summary)
+        console.print(console.green(f"✓ moved to {task_lists.label(target)}:") + " " + _summary(moved))
 
     def find(self, args):
         """List tasks whose title or tags contain the given text (case-insensitive)."""
@@ -435,17 +452,33 @@ class App:
         self.presenter.tasks(tasks, header, today)
 
     def complete_or_remove(self, command, rest):
-        """Handle ``done``/``rm`` after parsing their integer id arguments."""
+        """Handle ``done``/``rm`` after parsing their integer id arguments.
+
+        Ids are only ever integers, so an ``@name`` among them unambiguously
+        selects the list (``jasem todo done @work 3``). Any other non-integer
+        argument is refused rather than skipped, so a typo cannot quietly act
+        on fewer tasks than intended.
+        """
+        console = self.console
+        selectors = [argument for argument in rest if argument.startswith("@")]
+        if len(selectors) > 1:
+            console.print(console.red("name one list: " + " ".join(selectors)))
+            return
+        if selectors and not self._switch_list(selectors[0]):
+            return
         if self._missing_list():
             return
         ids = set()
         for argument in rest:
+            if argument in selectors:
+                continue
             try:
                 ids.add(int(argument))
             except ValueError:
-                pass
+                console.print(console.red(f"not a task id: {argument}"))
+                console.print(console.dim(f"  usage: jasem todo [@list] {command} <id> [id...]"))
+                return
         if not ids:
-            console = self.console
             console.print(console.red(f"usage: jasem todo {command} <id> [id...]"))
             console.print(console.dim(
                 f'  (to add a task that starts with "{command}", quote it: '
@@ -458,30 +491,65 @@ class App:
             self.remove(ids)
 
     def complete(self, ids):
-        """Mark the tasks with the given ids complete."""
+        """Mark the tasks with the given ids complete.
+
+        Every message names the list, and tasks that were already complete are
+        reported as such: ids restart in each list, so ``done 3`` aimed at the
+        wrong list must not look like it worked.
+        """
         tasks = self.tasks.load()
-        completed = [task for task in tasks if task.id in ids]
+        matched = [task for task in tasks if task.id in ids]
+        completed = [task for task in matched if not task.done]
+        already = [task for task in matched if task.done]
         for task in completed:
             task.done = True
-        self.tasks.save(tasks)
-        console = self.console
         if completed:
-            summary = ", ".join(f"#{task.id} {task.title}" for task in completed)
-            console.print(console.green("✓ completed:") + " " + summary)
-        else:
-            console.print(console.red("no matching id(s)"))
+            self.tasks.save(tasks)
+        console = self.console
+        where = self._where()
+        if completed:
+            console.print(console.green("✓ completed:") + " " + _summary(completed) + where)
+        if already:
+            console.print(console.yellow("already done:") + " " + _summary(already) + where)
+        self._report_missing(ids, matched)
+        if not completed:
+            self._per_list_hint("done")
 
     def remove(self, ids):
         """Delete the tasks with the given ids."""
         tasks = self.tasks.load()
         kept = [task for task in tasks if task.id not in ids]
-        removed = len(tasks) - len(kept)
-        self.tasks.save(kept)
+        removed = [task for task in tasks if task.id in ids]
+        if removed:
+            self.tasks.save(kept)
         console = self.console
-        console.print(
-            console.green(f"✓ removed {removed} task(s)") if removed
-            else console.red("no matching id(s)")
-        )
+        if removed:
+            console.print(console.green("✓ removed:") + " " + _summary(removed) + self._where())
+        self._report_missing(ids, removed)
+        if not removed:
+            self._per_list_hint("rm")
+
+    def _where(self):
+        """Return a dim suffix naming the selected list."""
+        return self.console.dim("  · " + task_lists.label(self.list_name))
+
+    def _report_missing(self, ids, found):
+        """Print the requested ids that matched no task in the selected list."""
+        missing = sorted(ids - {task.id for task in found})
+        if missing:
+            console = self.console
+            console.print(console.red("no task " + ", ".join(f"#{i}" for i in missing))
+                          + self._where())
+
+    def _per_list_hint(self, command):
+        """Remind that ids are per list when another list could be the target."""
+        others = [name for name in [""] + task_lists.discover(self.config.task_file)
+                  if name != self.list_name]
+        if others:
+            console = self.console
+            console.print(console.dim("  ids are numbered per list · ")
+                          + console.green(f"jasem todo @<list> {command} <id>")
+                          + console.dim("  ·  see ") + console.green("jasem todo lists"))
 
     def set_field(self, args):
         """Update one field of a task identified by its id."""

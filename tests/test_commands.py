@@ -170,6 +170,53 @@ class TodoListTests(CommandTestCase):
         self.assertEqual([t.id for t in self._load("work")], [1])
         self.assertEqual([t.title for t in self._load("")], ["default task"])
 
+    def test_done_and_rm_accept_the_selector_among_ids(self):
+        """``done @work 2`` selects the list instead of ignoring the selector."""
+        self._seed("", "default one", "default two")
+        self._seed("work", "first", "second", "third")
+        self.app.run(["todo", "done", "@work", "2"])
+        self.assertEqual([t.done for t in self._load("work")], [False, True, False])
+        self.assertFalse(any(t.done for t in self._load("")))
+        self.assertIn("@work", self._output())
+        self.app.run(["todo", "rm", "3", "@work"])
+        self.assertEqual([t.id for t in self._load("work")], [1, 2])
+
+    def test_done_refuses_two_selectors(self):
+        """Naming two lists among the ids changes nothing."""
+        self._seed("work", "first")
+        self._seed("home", "first")
+        self.app.run(["todo", "done", "@work", "@home", "1"])
+        self.assertIn("name one list", self._output())
+        self.assertFalse(self._load("work")[0].done)
+        self.assertFalse(self._load("home")[0].done)
+
+    def test_done_refuses_non_id_arguments(self):
+        """A stray non-id argument is reported, not silently skipped."""
+        self._seed("", "first", "second")
+        self.app.run(["todo", "done", "1", "oops"])
+        self.assertIn("not a task id: oops", self._output())
+        self.assertFalse(any(t.done for t in self._load("")))
+
+    def test_done_reports_tasks_that_were_already_done(self):
+        """Re-completing a task says so instead of claiming success."""
+        TaskStore(self._path(""), "").save([Task(id=1, done=True, title="old news")])
+        self._seed("work", "current")
+        self.app.run(["todo", "done", "1"])
+        out = self._output()
+        self.assertIn("already done: #1 old news", out)
+        self.assertNotIn("✓ completed", out)
+        self.assertIn("ids are numbered per list", out)
+        self.assertFalse(self._load("work")[0].done)
+
+    def test_done_names_the_list_and_missing_ids(self):
+        """The confirmation names the list, and unknown ids are listed."""
+        self._seed("work", "first")
+        self.app.run(["todo", "@work", "done", "1", "7"])
+        out = self._output()
+        self.assertIn("✓ completed: #1 first", out)
+        self.assertIn("· @work", out)
+        self.assertIn("no task #7", out)
+
     def test_set_and_find_are_scoped(self):
         """``set`` and ``find`` see only the selected list."""
         self._seed("", "pay rent")

@@ -100,14 +100,19 @@ jasem todo find "ali pr"
 
 ## Completing tasks
 
-Mark one or more tasks complete by id (ids come from any list):
+Mark one or more tasks complete by id (the `#` shown in any view of that list):
 
 ```text
 $ jasem todo done 1
-✓ completed: #1 pay rent
+✓ completed: #1 pay rent  · default
 
 $ jasem todo done 2 3 5        # several at once
 ```
+
+Every confirmation names the list it acted on. Ids restart in each
+[list](#multiple-lists), so a task that is already complete is reported as
+`already done:` rather than completed again — usually a sign the id belongs to
+another list.
 
 Completed tasks disappear from the open views but remain in `jasem todo all`.
 
@@ -117,7 +122,7 @@ Permanently remove tasks by id (`rm`, or the aliases `remove`/`del`/`delete`):
 
 ```text
 $ jasem todo rm 4
-✓ removed 1 task(s)
+✓ removed: #4 renew passport  · default
 
 $ jasem todo rm 4 5 6
 ```
@@ -169,7 +174,13 @@ jasem todo @work set 3 priority high
 ```
 
 The selector is always the **first** argument, and never contains a space — so
-`jasem todo "@ali review the PR"` still adds an ordinary task.
+`jasem todo "@ali review the PR"` still adds an ordinary task. The one exception
+is `done` and `rm`, whose arguments are only ever ids, so the selector may also
+sit among them: `jasem todo done @work 3`.
+
+The selection lasts for that one command. `jasem todo @work` followed by
+`jasem todo done 3` completes #3 in the **default** list — repeat the `@work`
+(or set `JASEM_LIST`) to stay in a list.
 
 A list comes into being with its first task, in its own file:
 
